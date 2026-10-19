@@ -1,0 +1,693 @@
+<title>Směny SPORT</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: vysílací rundown — nahoře „slate“ s další směnou vybraného člověka, pod ním EPG mřížka měsíce (dny × časová osa), dole hodiny, legenda a kontrola tabulky */
+:root {
+  --bg: #EEF1F5;
+  --surface: #FFFFFF;
+  --surface-2: #F6F8FA;
+  --ink: #121620;
+  --muted: #596274;
+  --line: #D8DDE5;
+  --line-soft: #E8ECF1;
+  --weekend: #E9EDF3;
+  --tally: #D42A24;
+  --tally-soft: #FCEBEA;
+  --on-tally: #FFFFFF;
+  --on-bar: #FFFFFF;
+  --p1: #2E58E0; --p2: #0B8371; --p3: #A35C04; --p4: #8A3CC4; --p5: #B8325F; --p6: #4A6F22;
+  --f-display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --f-body: "Barlow", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0D1016; --surface: #151A22; --surface-2: #11151C; --ink: #E6EAF0; --muted: #97A1B1;
+    --line: #283040; --line-soft: #1D2430; --weekend: #121823; --tally: #FF5A52; --tally-soft: #2C1514;
+    --on-tally: #1A0605; --on-bar: #0D1016;
+    --p1: #7F9DFF; --p2: #38CCB3; --p3: #F1A94C; --p4: #C290F7; --p5: #F27DA5; --p6: #9DCC6B;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0D1016; --surface: #151A22; --surface-2: #11151C; --ink: #E6EAF0; --muted: #97A1B1;
+  --line: #283040; --line-soft: #1D2430; --weekend: #121823; --tally: #FF5A52; --tally-soft: #2C1514;
+  --on-tally: #1A0605; --on-bar: #0D1016;
+  --p1: #7F9DFF; --p2: #38CCB3; --p3: #F1A94C; --p4: #C290F7; --p5: #F27DA5; --p6: #9DCC6B;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.45; }
+p, h1, h2, h3, ol, ul { margin: 0; }
+button { font: inherit; color: inherit; }
+button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid var(--p1); outline-offset: 2px; }
+a { color: var(--p1); }
+.muted { color: var(--muted); }
+
+.wrap { max-width: 1180px; margin: 0 auto; padding-inline: 16px; padding-block: 20px 44px; display: flex; flex-direction: column; gap: 18px; }
+@media (min-width: 760px) { .wrap { padding-inline: 28px; padding-block: 28px 56px; gap: 22px; } }
+
+.eyebrow { font-family: var(--f-display); font-weight: 600; font-size: 13px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+
+/* hlavička */
+.top { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 10px 24px; }
+h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(36px, 6vw, 54px); line-height: .92; text-transform: uppercase; letter-spacing: .01em; margin-top: 4px; text-wrap: balance; }
+.fresh { font-family: var(--f-mono); font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.fresh.stale { color: var(--tally); }
+
+.people { display: flex; flex-wrap: wrap; gap: 8px; }
+.person { appearance: none; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line); background: var(--surface); font-weight: 600; font-size: 14px; line-height: 1; padding: 9px 14px 9px 11px; border-radius: 999px; }
+.person:hover { border-color: var(--pc); }
+.person .dot, .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--pc); flex: none; }
+.person[aria-pressed="true"] { background: var(--pc); border-color: var(--pc); color: var(--on-bar); }
+.person[aria-pressed="true"] .dot { background: var(--on-bar); }
+
+/* slate */
+.slate { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; display: grid; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 880px) { .slate { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); } }
+.slate-main { padding: 18px 20px 20px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.slate-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.who-chip { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; font-size: 14px; }
+.slate-when { font-family: var(--f-display); font-weight: 600; font-size: 22px; text-transform: uppercase; letter-spacing: .03em; }
+.slate-time { font-family: var(--f-display); font-weight: 700; font-size: clamp(60px, 12vw, 104px); line-height: .88; font-variant-numeric: tabular-nums; letter-spacing: -.005em; }
+.slate-time .dash { color: var(--muted); font-weight: 500; padding-inline: .04em; }
+.slate-time.untimed { font-size: clamp(44px, 8vw, 72px); }
+.slate-status { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-family: var(--f-mono); font-size: 13px; color: var(--muted); }
+.onair { display: inline-flex; align-items: center; gap: 7px; background: var(--tally); color: var(--on-tally); font-family: var(--f-display); font-weight: 700; font-size: 14px; letter-spacing: .12em; text-transform: uppercase; padding: 4px 9px 3px; border-radius: 3px; }
+.onair .led { width: 7px; height: 7px; border-radius: 50%; background: currentColor; animation: blink 1.6s ease-in-out infinite; }
+@keyframes blink { 50% { opacity: .25; } }
+.slate-with { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; }
+.lbl { font-family: var(--f-display); font-weight: 600; font-size: 13px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-right: 4px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--surface-2); border-radius: 4px; padding: 3px 8px; font-size: 13px; }
+.chip .t { font-family: var(--f-mono); font-size: 12px; color: var(--muted); }
+
+.slate-side { padding: 16px 20px 18px; border-top: 1px solid var(--line); background: var(--surface-2); display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+@media (min-width: 880px) { .slate-side { border-top: 0; border-left: 1px solid var(--line); } }
+.next-list { list-style: none; padding: 0; display: flex; flex-direction: column; }
+.next-list li { display: grid; grid-template-columns: 5.6rem minmax(0, 1fr) auto; gap: 10px; align-items: baseline; padding: 7px 0; border-bottom: 1px solid var(--line); }
+.next-list li:last-child { border-bottom: 0; }
+.nd { font-family: var(--f-display); font-weight: 600; font-size: 18px; text-transform: uppercase; letter-spacing: .02em; }
+.nt { font-family: var(--f-mono); font-size: 13px; }
+.nr { font-size: 13px; color: var(--muted); white-space: nowrap; }
+.stats { display: flex; flex-wrap: wrap; gap: 8px 22px; padding-top: 10px; border-top: 1px solid var(--line); }
+.stat b { display: block; font-family: var(--f-display); font-weight: 700; font-size: 30px; line-height: 1; font-variant-numeric: tabular-nums; }
+.stat span { font-family: var(--f-display); font-weight: 600; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+
+/* měsíc */
+.board { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: clip; }
+.board-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+.tabs { display: flex; flex-wrap: wrap; gap: 2px; }
+.tab { appearance: none; border: 0; background: transparent; cursor: pointer; font-family: var(--f-display); font-weight: 700; font-size: 19px; line-height: 1; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); padding: 8px 10px; border-radius: 6px; }
+.tab:hover { color: var(--ink); }
+.tab[aria-selected="true"] { color: var(--ink); background: var(--bg); }
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg button { appearance: none; border: 0; background: transparent; cursor: pointer; color: var(--muted); font-weight: 600; font-size: 13px; line-height: 1; padding: 8px 12px; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+.mine { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--muted); cursor: pointer; }
+
+.epg { --label: 2.9rem; }
+.axis, .row { display: grid; grid-template-columns: var(--label) minmax(0, 1fr); column-gap: 10px; padding-inline: 12px; }
+@media (min-width: 760px) {
+  .epg { --label: 4.2rem; }
+  .axis, .row { grid-template-columns: var(--label) minmax(0, 1fr) minmax(0, 12.5rem); padding-inline: 14px; }
+}
+.axis { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 3; background: var(--surface); border-bottom: 1px solid var(--line); padding-block: 8px 6px; }
+.axis .xh { display: none; }
+@media (min-width: 760px) { .axis .xh { display: block; font-family: var(--f-display); font-weight: 600; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); } }
+.ticks { position: relative; height: 15px; font-family: var(--f-mono); font-size: 11px; color: var(--muted); }
+.ticks span { position: absolute; top: 0; transform: translateX(-50%); }
+.ticks span.first { transform: none; }
+.ticks span.last { transform: translateX(-100%); }
+@media (max-width: 599px) { .ticks span.odd { display: none; } }
+
+.row { align-items: center; border-bottom: 1px solid var(--line-soft); padding-block: 2px; }
+.row:last-child { border-bottom: 0; }
+.row.we { background: var(--weekend); }
+.row.today { background: var(--tally-soft); }
+.row.past .bar, .row.past .tag { opacity: .45; }
+.dl { display: flex; align-items: baseline; gap: 6px; font-family: var(--f-display); }
+.dl b { font-weight: 700; font-size: 22px; min-width: 1.15em; text-align: right; font-variant-numeric: tabular-nums; }
+.dl span { font-weight: 600; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.row.today .dl b, .row.today .dl span { color: var(--tally); }
+.track { position: relative; display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); grid-auto-rows: 24px; grid-auto-flow: row dense; row-gap: 3px; padding-block: 4px; min-height: 32px;
+  background-image: linear-gradient(to right, var(--line) 1px, transparent 1px); background-size: calc(100% / var(--hours)) 100%; border-right: 1px solid var(--line); }
+.bar { --pc: var(--p1); display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; white-space: nowrap; padding: 0 7px; border-radius: 4px; font-size: 12px; line-height: 1;
+  border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); }
+@supports (background: color-mix(in srgb, red 50%, blue)) {
+  .bar { background: color-mix(in srgb, var(--pc) 15%, var(--surface)); border-color: color-mix(in srgb, var(--pc) 45%, transparent); }
+}
+.bar.sel { background: var(--pc); border-color: var(--pc); color: var(--on-bar); }
+.bar .who { font-weight: 600; }
+.bar .t { font-family: var(--f-mono); font-size: 11px; opacity: .85; }
+.bar .full { display: none; }
+@media (min-width: 760px) { .bar .full { display: inline; } .bar .short { display: none; } }
+.now { position: absolute; top: -2px; bottom: -2px; width: 2px; margin-left: -1px; background: var(--tally); pointer-events: none; z-index: 2; }
+.now::before { content: ""; position: absolute; top: -1px; left: 50%; width: 8px; height: 8px; margin-left: -4px; border-radius: 50%; background: var(--tally); }
+.x { grid-column: 2; display: flex; flex-wrap: wrap; gap: 4px; padding-bottom: 4px; min-width: 0; }
+.x:empty { display: none; }
+@media (min-width: 760px) { .x { grid-column: 3; padding-bottom: 0; } .x:empty { display: flex; } }
+.tag { --pc: var(--muted); display: inline-flex; align-items: center; gap: 5px; font-size: 12px; line-height: 1.2; padding: 2px 7px; border-radius: 4px; border: 1px dashed var(--pc); color: var(--ink); }
+.tag.sel { border-style: solid; font-weight: 600; }
+.tag.note { border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); }
+.board-empty { padding: 28px 16px; color: var(--muted); text-align: center; }
+
+.tbl-wrap { overflow-x: auto; }
+.tbl { border-collapse: collapse; width: 100%; min-width: 560px; font-size: 14px; font-variant-numeric: tabular-nums; }
+.tbl th, .tbl td { padding: 5px 12px; border-bottom: 1px solid var(--line-soft); text-align: left; white-space: nowrap; }
+.tbl thead th { font-family: var(--f-display); font-weight: 600; font-size: 14px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); background: var(--surface); }
+.tbl thead th.sel { color: var(--ink); }
+.tbl thead th .dot { display: inline-block; margin-right: 6px; vertical-align: 1px; }
+.tbl td.d { font-family: var(--f-display); font-weight: 600; font-size: 16px; }
+.tbl td.d span { color: var(--muted); text-transform: uppercase; font-size: 13px; margin-left: 4px; }
+.tbl tr.we td { background: var(--weekend); }
+.tbl tr.today td { background: var(--tally-soft); }
+.tbl tr.today td.d { color: var(--tally); }
+.tbl tr.past td { opacity: .55; }
+.tbl tfoot td { font-weight: 600; border-top: 2px solid var(--line); border-bottom: 0; }
+.cell { display: inline-flex; align-items: center; gap: 8px; }
+.code { --pc: var(--muted); display: inline-grid; place-items: center; min-width: 28px; height: 24px; padding-inline: 5px; border-radius: 4px; font-family: var(--f-mono); font-weight: 600; font-size: 13px; border: 1px solid var(--line); background: var(--surface-2); }
+@supports (background: color-mix(in srgb, red 50%, blue)) { .code { background: color-mix(in srgb, var(--pc) 15%, var(--surface)); border-color: color-mix(in srgb, var(--pc) 40%, transparent); } }
+td.sel .code { background: var(--pc); border-color: var(--pc); color: var(--on-bar); }
+.cell .t { font-family: var(--f-mono); font-size: 12px; color: var(--muted); }
+
+/* kalendář */
+.cal { padding: 10px 8px 12px; }
+@media (min-width: 760px) { .cal { padding: 14px; } }
+.cal-head, .cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; }
+@media (min-width: 760px) { .cal-head, .cal-grid { gap: 6px; } }
+.cal-head span { font-family: var(--f-display); font-weight: 600; font-size: 13px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); text-align: center; padding-bottom: 4px; }
+.cell { appearance: none; font: inherit; color: var(--ink); text-align: left; cursor: pointer; display: flex; flex-direction: column; align-items: stretch; gap: 3px; min-width: 0; min-height: 62px; padding: 4px 3px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); overflow: hidden; }
+.cell:hover { border-color: var(--muted); }
+.cell.we { background: var(--weekend); }
+.cell.pad { border: 0; background: transparent; cursor: default; }
+.cell.past > * { opacity: .45; }
+.cell.today { border-color: var(--tally); }
+.cell.today .cn { color: var(--tally); }
+.cell[aria-pressed="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+.cn { display: flex; align-items: center; justify-content: space-between; gap: 4px; font-family: var(--f-display); font-weight: 700; font-size: 17px; line-height: 1; font-variant-numeric: tabular-nums; padding-inline: 2px; }
+.nm { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); flex: none; }
+.me { display: block; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-radius: 4px; background: var(--pc); color: var(--on-bar); font-family: var(--f-display); font-weight: 600; font-size: 13px; line-height: 1; padding: 4px 3px; text-align: center; }
+.me.untimed { background: transparent; color: var(--ink); border: 1px dashed var(--pc); }
+.oth { display: flex; flex-wrap: wrap; gap: 3px; padding-inline: 2px; }
+.ol { --pc: var(--muted); display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
+.ol .dot { width: 7px; height: 7px; }
+.cal .lg { display: none; }
+@media (min-width: 760px) {
+  .cell { min-height: 104px; padding: 7px; gap: 5px; }
+  .cn { font-size: 20px; padding-inline: 0; }
+  .me { font-family: var(--f-mono); font-size: 12px; padding: 5px 6px; text-align: left; }
+  .oth { flex-direction: column; flex-wrap: nowrap; gap: 2px; padding-inline: 0; }
+  .ol { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; }
+  .ol .t { font-family: var(--f-mono); font-size: 11px; }
+  .cal .lg { display: inline; }
+  .cal .sm { display: none; }
+  .cal .cnote { display: block; font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+}
+.day-detail { border-top: 1px solid var(--line); padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 8px; }
+.dd-date { font-family: var(--f-display); font-weight: 700; font-size: 20px; text-transform: uppercase; letter-spacing: .03em; }
+.dd-date span { color: var(--muted); font-weight: 600; font-size: 15px; margin-left: 8px; }
+.dd-list { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.dd-list li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 2px 10px; }
+.dd-list li.sel .dn { font-weight: 700; }
+.dt { font-family: var(--f-mono); font-size: 13px; }
+.dc { grid-column: 2 / -1; font-size: 12px; color: var(--muted); }
+@media (min-width: 600px) { .dd-list li { grid-template-columns: auto minmax(0, 12rem) 9rem auto; } .dc { grid-column: auto; } }
+.dd-note { font-size: 14px; color: var(--muted); }
+
+/* spodní karty */
+.info { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (min-width: 880px) { .info { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); } }
+.stack { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px 18px; min-width: 0; }
+h2 { font-family: var(--f-display); font-weight: 700; font-size: 21px; line-height: 1.1; letter-spacing: .03em; text-transform: uppercase; margin-bottom: 12px; text-wrap: balance; }
+h3 { font-family: var(--f-display); font-weight: 600; font-size: 14px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 14px 0 6px; }
+.hrow { display: grid; grid-template-columns: minmax(0, 8.5rem) minmax(0, 1fr) auto; align-items: center; gap: 4px 12px; padding: 7px 0; border-bottom: 1px solid var(--line-soft); }
+.hrow:last-child { border-bottom: 0; }
+.hn { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hrow.sel .hn { font-weight: 700; }
+.hbar { height: 10px; border-radius: 3px; background: var(--line-soft); overflow: hidden; }
+.hbar i { display: block; height: 100%; background: var(--pc); border-radius: 3px; }
+.hval { font-family: var(--f-mono); font-size: 13px; white-space: nowrap; }
+.hnote { grid-column: 1 / -1; font-size: 13px; color: var(--muted); }
+@media (max-width: 459px) { .hrow { grid-template-columns: minmax(0, 1fr) auto; } .hbar { grid-column: 1 / -1; grid-row: 2; } }
+.lg { display: grid; grid-template-columns: 2.4rem minmax(0, 1fr); align-items: center; gap: 10px; padding: 3px 0; font-family: var(--f-mono); font-size: 13px; }
+.lg .code { min-width: 0; }
+.small { font-size: 13px; color: var(--muted); }
+.warn { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 8px; font-size: 14px; }
+.warn li { display: grid; grid-template-columns: 1.1rem minmax(0, 1fr); gap: 6px; }
+.warn li::before { content: "!"; font-family: var(--f-display); font-weight: 700; color: var(--tally); text-align: center; }
+.warn.ok li::before { content: "✓"; color: var(--p2); }
+.vac { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+
+footer { font-family: var(--f-mono); font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px 18px; }
+
+@media (prefers-reduced-motion: reduce) { .onair .led { animation: none; } }
+</style>
+
+<div class="wrap" id="app">
+  <header class="top">
+    <div>
+      <p class="eyebrow">Rozpis směn · grafika</p>
+      <h1>Směny <span id="team">SPORT</span></h1>
+    </div>
+    <p class="fresh" id="fresh"></p>
+  </header>
+
+  <nav class="people" id="people" aria-label="Čí směny zvýraznit"></nav>
+
+  <section class="slate" id="slate" aria-live="polite"></section>
+
+  <section class="board" aria-label="Rozpis měsíce">
+    <div class="board-bar">
+      <div class="tabs" id="months" role="tablist" aria-label="Měsíc"></div>
+      <div class="controls">
+        <div class="seg" id="view" role="group" aria-label="Zobrazení">
+          <button type="button" id="view-kalendar" data-view="kalendar">Kalendář</button>
+          <button type="button" id="view-osa" data-view="osa">Časová osa</button>
+          <button type="button" id="view-tabulka" data-view="tabulka">Tabulka</button>
+        </div>
+        <label class="mine" for="onlyMine"><input type="checkbox" id="onlyMine"> <span id="onlyMineLabel">Jen dny vybraného člověka</span></label>
+      </div>
+    </div>
+    <div id="grid"></div>
+  </section>
+
+  <section class="info">
+    <div class="card" id="hours"></div>
+    <div class="stack">
+      <div class="card" id="legend"></div>
+      <div class="card" id="checks"></div>
+    </div>
+  </section>
+
+  <footer id="foot"></footer>
+</div>
+
+<div class="wrap" id="empty" hidden>
+  <h1>Směny</h1>
+  <p class="muted">Přehled zatím nemá data. V Claude Code napiš <b>/smeny obnov přehled</b> a Claude ho naplní z tabulky.</p>
+</div>
+
+<script id="smeny-data" type="application/json">__SMENY_DATA__</script>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  let DATA = null;
+  try { DATA = JSON.parse($('smeny-data').textContent); } catch (e) { DATA = null; }
+  if (!DATA || !Array.isArray(DATA.months) || !DATA.months.length) { $('app').hidden = true; $('empty').hidden = false; return; }
+
+  const WD = ['ne', 'po', 'út', 'st', 'čt', 'pá', 'so'];
+  const WD_LONG = ['neděle', 'pondělí', 'úterý', 'středa', 'čtvrtek', 'pátek', 'sobota'];
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const pl = (n, a, b, c) => { n = Math.abs(n); return n === 1 ? a : (n >= 2 && n <= 4 ? b : c); };
+  const slug = s => String(s).normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const num = n => String(n).replace('.', ',');
+  const hm = t => { const [h, m] = t.split(':'); return `${+h}:${m}`; };
+  const hShort = t => { const [h, m] = t.split(':'); return m === '00' ? `${+h}` : `${+h}:${m}`; };
+  const toH = t => { const [h, m] = t.split(':').map(Number); return h + m / 60; };
+  const vAt = t => { const h = +t.split(':')[0]; return ([2, 3, 4, 12, 13, 14].includes(h) || h >= 20) ? 've' : 'v'; };
+  const timeLabel = s => s.start ? `${hm(s.start)}–${hm(s.end)}` : (s.hours != null ? `${num(s.hours)} h, čas neuveden` : s.raw);
+  const timeShort = s => s.start ? `${hShort(s.start)}–${hShort(s.end)}` : (s.hours != null ? `${num(s.hours)} h` : s.raw);
+  const parseDate = iso => { const [y, m, d] = iso.split('-').map(Number); return new Date(y, m - 1, d); };
+  const isoOf = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const at = (iso, t) => { const d = parseDate(iso); const [h, m] = t.split(':').map(Number); d.setHours(h, m, 0, 0); return d; };
+  const sod = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const dayDiff = (a, b) => Math.round((sod(a) - sod(b)) / 864e5);
+  const dateLabel = d => `${WD[d.getDay()]} ${d.getDate()}. ${d.getMonth() + 1}.`;
+  const dateLong = d => `${WD_LONG[d.getDay()]} ${d.getDate()}. ${d.getMonth() + 1}.`;
+  const clock = d => `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
+  function relDay(d, now) {
+    const n = dayDiff(d, now);
+    if (n === 0) return 'dnes';
+    if (n === 1) return 'zítra';
+    if (n === 2) return 'pozítří';
+    if (n === -1) return 'včera';
+    return n > 0 ? `za ${n} ${pl(n, 'den', 'dny', 'dní')}` : `před ${-n} dny`;
+  }
+  function dur(ms) {
+    let m = Math.max(1, Math.round(ms / 6e4));
+    if (m < 60) return `${m} min`;
+    const h = Math.floor(m / 60); m %= 60;
+    if (h < 24) return m ? `${h} h ${m} min` : `${h} h`;
+    const d = Math.floor(h / 24), hh = h % 24;
+    return `${d} ${pl(d, 'den', 'dny', 'dní')}${hh ? ` ${hh} h` : ''}`;
+  }
+  const store = {
+    get(k) { try { return localStorage.getItem('smeny.' + k); } catch (e) { return null; } },
+    set(k, v) { try { localStorage.setItem('smeny.' + k, v); } catch (e) { /* bez úložiště */ } },
+  };
+
+  const people = DATA.people;
+  const colorOf = p => `var(--p${(Math.max(0, people.indexOf(p)) % 6) + 1})`;
+  const initials = p => p.split(' ').map(w => w[0]).join('').toUpperCase();
+
+  const SH = [];
+  DATA.months.forEach(m => m.days.forEach(d => d.shifts.forEach(s => {
+    let t0, t1;
+    const timed = !!s.start;
+    if (timed) { t0 = at(d.date, s.start); t1 = at(d.date, s.end); if (t1 <= t0) t1 = new Date(t1.getTime() + 864e5); }
+    else { t0 = parseDate(d.date); t1 = parseDate(d.date); t1.setDate(t1.getDate() + 1); }
+    SH.push({ ...s, day: d, month: m, t0, t1, timed });
+  })));
+  SH.sort((a, b) => a.t0 - b.t0);
+
+  const legendTimes = DATA.months.flatMap(m => Object.values(m.legend || {}).flatMap(sec => Object.values(sec)));
+  let H0 = 6, H1 = 20;
+  if (legendTimes.length) {
+    H0 = Math.floor(Math.min(...legendTimes.map(t => toH(t[0]))));
+    H1 = Math.ceil(Math.max(...legendTimes.map(t => toH(t[1]) <= toH(t[0]) ? 24 : toH(t[1]))));
+  }
+  const HOURS = Math.max(1, H1 - H0), COLS = HOURS * 4;
+  const col = t => Math.round((toH(t) - H0) * 4) + 1;
+
+  function initialPerson() {
+    const h = location.hash.slice(1);
+    const byHash = people.find(p => slug(p) === h);
+    if (byHash) return byHash;
+    const saved = store.get('person');
+    if (saved && people.includes(saved)) return saved;
+    return people.includes(DATA.defaultPerson) ? DATA.defaultPerson : people[0];
+  }
+  function defaultMonth() {
+    const n = new Date(), k = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`;
+    const ms = DATA.months;
+    return (ms.find(m => m.key === k) || ms.find(m => m.key > k) || ms[ms.length - 1]).key;
+  }
+  const state = {
+    person: initialPerson(),
+    view: ['kalendar', 'osa', 'tabulka'].includes(store.get('view')) ? store.get('view') : 'kalendar',
+    onlyMine: store.get('onlyMine') === '1',
+    month: defaultMonth(),
+    day: null,
+  };
+  const curMonth = () => DATA.months.find(m => m.key === state.month) || DATA.months[0];
+  function defaultDay(m) {
+    const today = isoOf(new Date());
+    if (m.days.some(d => d.date === today)) return today;
+    const mine = m.days.find(d => d.shifts.some(s => s.person === state.person));
+    return (mine || m.days[0] || {}).date || null;
+  }
+  state.day = defaultDay(curMonth());
+
+  function renderHeader() {
+    $('team').textContent = DATA.team || '';
+    const g = new Date(DATA.generated), now = new Date();
+    const stale = now - g > (DATA.public ? 4 * 36e5 : 2 * 864e5);
+    const f = $('fresh');
+    f.classList.toggle('stale', stale);
+    f.innerHTML = `<span>Data z tabulky: ${esc(relDay(g, now))} ${vAt(clock(g))} ${esc(clock(g))}</span>` +
+      (stale ? '<span>· ' + (DATA.public ? 'automatická obnova zřejmě stojí' : 'můžou být zastaralá, obnov je přes /smeny') + '</span>' : '');
+  }
+
+  function renderPeople() {
+    $('people').innerHTML = people.map(p =>
+      `<button class="person" type="button" style="--pc:${colorOf(p)}" data-p="${esc(p)}" aria-pressed="${p === state.person}"><span class="dot"></span>${esc(p)}</button>`
+    ).join('');
+  }
+
+  function chip(s) {
+    return `<span class="chip" style="--pc:${colorOf(s.person)}"><span class="dot"></span>${esc(s.person)} <span class="t">${esc(timeLabel(s))}</span></span>`;
+  }
+
+  function renderSlate() {
+    const now = new Date(), p = state.person;
+    const mine = SH.filter(s => s.person === p);
+    const up = mine.filter(s => s.t1 > now);
+    const last = DATA.months[DATA.months.length - 1];
+    const el = $('slate');
+    el.style.setProperty('--pc', colorOf(p));
+    if (!up.length) {
+      el.innerHTML = `<div class="slate-main"><div class="slate-head"><p class="eyebrow">Další směna</p><span class="who-chip"><span class="dot"></span>${esc(p)}</span></div>
+        <p class="slate-when">V rozpisu už nic není</p>
+        <p class="slate-status">Tabulka zatím sahá do: ${esc(last.label)}. Až přibude další měsíc, obnov přehled přes /smeny.</p></div>`;
+      return;
+    }
+    const cur = up[0];
+    const live = cur.timed && cur.t0 <= now;
+    let status;
+    if (live) status = `<span class="onair"><span class="led"></span>Ve směně</span><span>konec ${vAt(cur.end)} ${hm(cur.end)}, za ${dur(cur.t1 - now)}</span>`;
+    else if (cur.timed) status = `<span>začíná za ${dur(cur.t0 - now)}</span>`;
+    else status = `<span>začátek v legendě tabulky není, známe jen délku</span>`;
+    const others = cur.day.shifts.filter(s => s.person !== p);
+    const notes = cur.day.notes.map(n => `<span class="chip">${esc(n)}</span>`).join('');
+    const time = cur.timed
+      ? `<p class="slate-time">${hm(cur.start)}<span class="dash">–</span>${hm(cur.end)}</p>`
+      : `<p class="slate-time untimed">${esc(timeShort(cur))}</p>`;
+
+    const nextItems = up.slice(1, 5).map(s =>
+      `<li><span class="nd">${dateLabel(s.t0)}</span><span class="nt">${esc(timeLabel(s))}</span><span class="nr">${relDay(s.t0, now)}</span></li>`
+    ).join('') || '<li><span class="muted">V rozpisu už další směna není.</span></li>';
+
+    const sm = DATA.months.find(m => m.key === defaultMonth());
+    const inMonth = mine.filter(s => s.month === sm);
+    const left = inMonth.filter(s => s.t1 > now).length;
+    const hours = sm.hours[p] ?? 0;
+
+    el.innerHTML = `
+      <div class="slate-main">
+        <div class="slate-head"><p class="eyebrow">${live ? 'Právě teď' : 'Další směna'}</p><span class="who-chip"><span class="dot"></span>${esc(p)}</span></div>
+        <p class="slate-when">${esc(relDay(cur.t0, now))} · ${esc(dateLong(cur.t0))}</p>
+        ${time}
+        <p class="slate-status">${status}</p>
+        <div class="slate-with"><span class="lbl">Ve stejný den</span>${others.length ? others.map(chip).join('') : '<span class="muted">nikdo další</span>'}${notes}</div>
+      </div>
+      <div class="slate-side">
+        <p class="eyebrow">Potom</p>
+        <ol class="next-list">${nextItems}</ol>
+        <div class="stats" aria-label="${esc(sm.label)}">
+          <div class="stat"><b>${inMonth.length}</b><span>${pl(inMonth.length, 'směna', 'směny', 'směn')} · ${esc(sm.label)}</span></div>
+          <div class="stat"><b>${num(hours)}</b><span>hodin</span></div>
+          <div class="stat"><b>${left}</b><span>zbývá</span></div>
+        </div>
+      </div>`;
+  }
+
+  function renderTabs() {
+    $('months').innerHTML = DATA.months.map(m =>
+      `<button class="tab" role="tab" type="button" data-m="${m.key}" aria-selected="${m.key === state.month}">${esc(m.label)}</button>`
+    ).join('');
+    document.querySelectorAll('#view [data-view]').forEach(b => b.setAttribute('aria-pressed', b.dataset.view === state.view));
+    $('onlyMine').checked = state.onlyMine;
+    const first = state.person.split(' ')[0];
+    $('onlyMineLabel').textContent = state.view === 'kalendar' ? `Jen směny: ${first}` : `Jen dny, kdy má směnu ${first}`;
+  }
+
+  function visibleDays(m) {
+    return m.days.filter(d => !state.onlyMine || d.shifts.some(s => s.person === state.person));
+  }
+
+  function renderEpg(m) {
+    const now = new Date(), todayIso = isoOf(now);
+    const days = visibleDays(m);
+    if (!days.length) return `<p class="board-empty">${esc(state.person)} nemá v měsíci ${esc(m.label)} žádnou směnu.</p>`;
+    const ticks = [];
+    for (let h = H0; h <= H1; h++) {
+      const cls = [h === H0 && 'first', h === H1 && 'last', (h - H0) % 2 && 'odd'].filter(Boolean).join(' ');
+      ticks.push(`<span class="${cls}" style="left:${((h - H0) / HOURS * 100).toFixed(3)}%">${h}</span>`);
+    }
+    const rows = days.map(d => {
+      const date = parseDate(d.date);
+      const cls = ['row', d.weekend && 'we', d.date === todayIso && 'today', d.date < todayIso && 'past'].filter(Boolean).join(' ');
+      const bars = [], tags = [];
+      [...d.shifts].sort((a, b) => (a.start || '99').localeCompare(b.start || '99')).forEach(s => {
+        const sel = s.person === state.person ? ' sel' : '';
+        const style = `--pc:${colorOf(s.person)}`;
+        const title = esc(`${s.person} · ${timeLabel(s)} · v tabulce ${s.raw}`);
+        if (s.start) {
+          const a = Math.max(1, col(s.start));
+          const b = Math.min(COLS + 1, toH(s.end) <= toH(s.start) ? COLS + 1 : col(s.end));
+          if (b > a) {
+            bars.push(`<div class="bar${sel}" style="${style};grid-column:${a} / ${b}" title="${title}"><span class="who"><span class="short">${esc(initials(s.person))}</span><span class="full">${esc(s.person)}</span></span><span class="t">${esc(timeShort(s))}</span></div>`);
+            return;
+          }
+        }
+        tags.push(`<span class="tag${sel}" style="${style}" title="${title}"><span class="dot"></span>${esc(initials(s.person))} · ${esc(timeShort(s))}</span>`);
+      });
+      d.notes.forEach(n => tags.push(`<span class="tag note">${esc(n)}</span>`));
+      let nowLine = '';
+      if (d.date === todayIso) {
+        const h = now.getHours() + now.getMinutes() / 60;
+        if (h >= H0 && h <= H1) nowLine = `<div class="now" style="left:${((h - H0) / HOURS * 100).toFixed(2)}%" title="Teď ${clock(now)}"></div>`;
+      }
+      return `<div class="${cls}"><div class="dl"><b>${date.getDate()}</b><span>${WD[date.getDay()]}</span></div>` +
+        `<div class="track" style="--cols:${COLS};--hours:${HOURS}">${bars.join('')}${nowLine}</div><div class="x">${tags.join('')}</div></div>`;
+    }).join('');
+    return `<div class="epg"><div class="axis"><div></div><div class="ticks">${ticks.join('')}</div><div class="xh">Bez času, poznámky</div></div>${rows}</div>`;
+  }
+
+  function renderTable(m) {
+    const todayIso = isoOf(new Date());
+    const days = visibleDays(m);
+    if (!days.length) return `<p class="board-empty">${esc(state.person)} nemá v měsíci ${esc(m.label)} žádnou směnu.</p>`;
+    const ps = m.people;
+    const head = `<tr><th>Den</th>${ps.map(p => `<th class="${p === state.person ? 'sel' : ''}" style="--pc:${colorOf(p)}"><span class="dot"></span>${esc(p)}</th>`).join('')}<th>Poznámka</th></tr>`;
+    const body = days.map(d => {
+      const date = parseDate(d.date);
+      const cls = [d.weekend && 'we', d.date === todayIso && 'today', d.date < todayIso && 'past'].filter(Boolean).join(' ');
+      const cells = ps.map(p => {
+        const s = d.shifts.find(x => x.person === p);
+        const sel = p === state.person ? 'sel' : '';
+        if (!s) return `<td class="${sel}"></td>`;
+        return `<td class="${sel}" style="--pc:${colorOf(p)}"><span class="cell"><span class="code">${esc(s.raw)}</span><span class="t">${esc(s.start ? timeShort(s) : 'bez času')}</span></span></td>`;
+      }).join('');
+      return `<tr class="${cls}"><td class="d">${date.getDate()}.<span>${WD[date.getDay()]}</span></td>${cells}<td class="small">${esc(d.notes.join('; '))}</td></tr>`;
+    }).join('');
+    const foot = `<tr><td>Hodiny</td>${ps.map(p => `<td>${num(m.hours[p] ?? 0)} h</td>`).join('')}<td></td></tr>`;
+    return `<div class="tbl-wrap"><table class="tbl"><thead>${head}</thead><tbody>${body}</tbody><tfoot>${foot}</tfoot></table></div>`;
+  }
+
+  function renderCalendar(m) {
+    const todayIso = isoOf(new Date());
+    const byDate = Object.fromEntries(m.days.map(d => [d.date, d]));
+    const first = new Date(m.year, m.month - 1, 1);
+    const ndays = new Date(m.year, m.month, 0).getDate();
+    const byStart = (a, b) => (a.start || '99').localeCompare(b.start || '99');
+    const pad = '<span class="cell pad" aria-hidden="true"></span>';
+    const cells = Array((first.getDay() + 6) % 7).fill(pad);
+    for (let n = 1; n <= ndays; n++) {
+      const date = new Date(m.year, m.month - 1, n), iso = isoOf(date);
+      const d = byDate[iso] || { shifts: [], notes: [] };
+      const mine = d.shifts.find(s => s.person === state.person);
+      const others = state.onlyMine ? [] : d.shifts.filter(s => s.person !== state.person).sort(byStart);
+      const cls = ['cell', date.getDay() % 6 === 0 && 'we', iso === todayIso && 'today', iso < todayIso && 'past'].filter(Boolean).join(' ');
+      const label = `${dateLong(date)}: ${mine ? `${state.person} ${timeLabel(mine)}` : `${state.person} nemá směnu`}` +
+        (others.length ? `, dál ${others.map(o => `${o.person} ${timeLabel(o)}`).join(', ')}` : '');
+      cells.push(`<button type="button" class="${cls}" data-day="${iso}" aria-pressed="${iso === state.day}" aria-label="${esc(label)}">` +
+        `<span class="cn">${n}${d.notes.length ? '<span class="nm" aria-hidden="true"></span>' : ''}</span>` +
+        (mine ? `<span class="me${mine.start ? '' : ' untimed'}" style="--pc:${colorOf(state.person)}"><span class="sm">${esc(timeShort(mine))}</span><span class="lg">${esc(mine.start ? timeLabel(mine) : timeShort(mine) + ', bez času')}</span></span>` : '') +
+        (others.length ? `<span class="oth">${others.map(o => `<span class="ol" style="--pc:${colorOf(o.person)}"><span class="dot"></span><span class="lg">${esc(initials(o.person))} <span class="t">${esc(timeShort(o))}</span></span></span>`).join('')}</span>` : '') +
+        (d.notes.length ? `<span class="cnote lg">${esc(d.notes.join('; '))}</span>` : '') +
+        '</button>');
+    }
+    while (cells.length % 7) cells.push(pad);
+    const head = ['po', 'út', 'st', 'čt', 'pá', 'so', 'ne'].map(w => `<span>${w}</span>`).join('');
+    return `<div class="cal"><div class="cal-head" aria-hidden="true">${head}</div><div class="cal-grid">${cells.join('')}</div></div>${renderDayDetail(m)}`;
+  }
+
+  function renderDayDetail(m) {
+    const d = m.days.find(x => x.date === state.day);
+    if (!d) return '';
+    const date = parseDate(d.date);
+    const rows = [...d.shifts].sort((a, b) => (a.start || '99').localeCompare(b.start || '99')).map(s =>
+      `<li class="${s.person === state.person ? 'sel' : ''}" style="--pc:${colorOf(s.person)}"><span class="dot"></span><span class="dn">${esc(s.person)}</span><span class="dt">${esc(timeLabel(s))}</span><span class="dc">v tabulce ${esc(s.raw)}</span></li>`
+    ).join('');
+    return `<div class="day-detail" aria-live="polite"><p class="dd-date">${esc(dateLong(date))}<span>${esc(relDay(date, new Date()))}</span></p>` +
+      (rows ? `<ul class="dd-list">${rows}</ul>` : '<p class="muted">Nikdo nemá směnu.</p>') +
+      (d.notes.length ? `<p class="dd-note">Poznámka: ${esc(d.notes.join('; '))}</p>` : '') + '</div>';
+  }
+
+  function renderHours(m) {
+    const max = Math.max(1, ...m.people.map(p => m.hours[p] || 0));
+    const rows = m.people.map(p => {
+      const h = m.hours[p] || 0, c = m.shiftCount[p] || 0, t = (m.sheetTotals || {})[p];
+      const notes = [...(m.footnotes[p] || [])];
+      if (t != null && Math.abs(t - h) > 0.01) notes.push(`v řádku součtů je ${num(t)} h`);
+      return `<div class="hrow${p === state.person ? ' sel' : ''}" style="--pc:${colorOf(p)}">
+        <span class="hn">${esc(p)}</span><span class="hbar"><i style="width:${(h / max * 100).toFixed(1)}%"></i></span>
+        <span class="hval">${num(h)} h · ${c} ${pl(c, 'směna', 'směny', 'směn')}</span>
+        ${notes.length ? `<span class="hnote">${esc(notes.join(' · '))}</span>` : ''}</div>`;
+    }).join('');
+    $('hours').innerHTML = `<h2>Hodiny · ${esc(m.label)}</h2>${rows}`;
+  }
+
+  function renderLegend(m) {
+    const sec = (title, obj) => {
+      const items = Object.entries(obj || {});
+      if (!items.length) return '';
+      return `<h3>${title}</h3>` + items.map(([code, [a, b]]) => `<div class="lg"><span class="code">${esc(code)}</span><span>${hm(a)}–${hm(b)}</span></div>`).join('');
+    };
+    const unknown = [...new Set(m.days.flatMap(d => d.shifts.filter(s => !s.start).map(s => s.raw)))];
+    $('legend').innerHTML = `<h2>Kódy v tabulce</h2><p class="small">Číslo v buňce je počet hodin. Čas začátku se bere z legendy pod rozpisem.</p>` +
+      sec('Pracovní dny', m.legend.weekday) + sec('Víkend', m.legend.weekend) +
+      (unknown.length ? `<h3>Bez legendy</h3><p class="small">${unknown.map(esc).join(', ')}: délku známe, začátek ne.</p>` : '');
+  }
+
+  function renderChecks(m) {
+    const warns = m.warnings || [];
+    const vac = Object.entries(DATA.vacations || {});
+    $('checks').innerHTML = `<h2>Kontrola tabulky</h2>` +
+      (warns.length ? `<ul class="warn">${warns.map(w => `<li>${esc(w)}</li>`).join('')}</ul>`
+        : `<ul class="warn ok"><li>Součty hodin sedí se směnami a všechny kódy mají čas.</li></ul>`) +
+      (vac.length ? `<h3>Plánované dovolené</h3><ul class="vac">${vac.map(([p, v]) => `<li><b>${esc(p)}</b>: ${esc(v.join(', '))}</li>`).join('')}</ul>` : '');
+  }
+
+  function renderFoot(m) {
+    const g = new Date(DATA.generated);
+    const src = DATA.sheetUrl
+      ? `<span>Zdroj: <a href="${esc(DATA.sheetUrl)}#gid=${esc(m.gid)}" target="_blank" rel="noopener">list „${esc(m.tab)}“ v Google tabulce</a></span>`
+      : `<span>Zdroj: list „${esc(m.tab)}“ v tabulce směn</span>`;
+    const refresh = DATA.public ? '<span>Obnova každých 30 minut</span>' : '<span>Obnova: /smeny v Claude Code, nebo dvojklik na smeny.cmd</span>';
+    $('foot').innerHTML = src +
+      `<span>Staženo ${g.getDate()}. ${g.getMonth() + 1}. ${g.getFullYear()} ${vAt(clock(g))} ${clock(g)}</span>` + refresh;
+  }
+
+  function renderBoard() {
+    const m = curMonth();
+    $('grid').innerHTML = state.view === 'tabulka' ? renderTable(m) : state.view === 'osa' ? renderEpg(m) : renderCalendar(m);
+    renderHours(m);
+    renderLegend(m);
+    renderChecks(m);
+    renderFoot(m);
+  }
+
+  function renderAll() {
+    renderHeader();
+    renderPeople();
+    renderSlate();
+    renderTabs();
+    renderBoard();
+  }
+
+  $('people').addEventListener('click', e => {
+    const b = e.target.closest('[data-p]');
+    if (!b) return;
+    state.person = b.dataset.p;
+    store.set('person', state.person);
+    try { history.replaceState(null, '', '#' + slug(state.person)); } catch (err) { /* sandbox */ }
+    renderAll();
+  });
+  $('months').addEventListener('click', e => {
+    const b = e.target.closest('[data-m]');
+    if (!b) return;
+    state.month = b.dataset.m;
+    state.day = defaultDay(curMonth());
+    renderTabs();
+    renderBoard();
+  });
+  $('view').addEventListener('click', e => {
+    const b = e.target.closest('[data-view]');
+    if (!b) return;
+    state.view = b.dataset.view;
+    store.set('view', state.view);
+    renderTabs();
+    renderBoard();
+  });
+  $('onlyMine').addEventListener('change', e => {
+    state.onlyMine = e.target.checked;
+    store.set('onlyMine', state.onlyMine ? '1' : '0');
+    renderBoard();
+  });
+
+  $('grid').addEventListener('click', e => {
+    const b = e.target.closest('[data-day]');
+    if (!b) return;
+    state.day = b.dataset.day;
+    $('grid').innerHTML = renderCalendar(curMonth());
+    $('grid').querySelector(`[data-day="${state.day}"]`)?.focus();
+  });
+
+  renderAll();
+  let lastDay = isoOf(new Date());
+  setInterval(() => {
+    const today = isoOf(new Date());
+    if (today !== lastDay) { lastDay = today; renderAll(); return; }
+    renderHeader();
+    renderSlate();
+    if (state.view === 'osa') $('grid').innerHTML = renderEpg(curMonth());
+  }, 60000);
+})();
+</script>
