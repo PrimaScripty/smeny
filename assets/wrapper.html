@@ -65,6 +65,25 @@ h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(36px, 6vw
 .person[aria-pressed="true"] { background: var(--pc); border-color: var(--pc); color: var(--on-bar); }
 .person[aria-pressed="true"] .dot { background: var(--on-bar); }
 
+/* Hodně lidí (DENNÍ): na počítači boční panel, na mobilu výběr ze seznamu místo řady tlačítek */
+.layout, .main { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+@media (min-width: 760px) { .layout, .main { gap: 22px; } }
+.side-h, .people-select { display: none; }
+.many .people { display: none; }
+.many .people-select { display: flex; align-items: center; gap: 10px; }
+.people-select span { font-family: var(--f-display); font-weight: 600; font-size: 13px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.people-select select { flex: 1; min-width: 0; font: 600 15px/1.2 var(--f-body); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+@media (min-width: 960px) {
+  .layout.many { display: grid; grid-template-columns: 13.5rem minmax(0, 1fr); align-items: start; }
+  .many .side { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 8px 8px; }
+  .many .side-h { display: block; padding: 0 8px 8px; }
+  .many .people { display: flex; flex-direction: column; gap: 2px; }
+  .many .people-select { display: none; }
+  .many .person { width: 100%; justify-content: flex-start; border: 0; border-radius: 6px; padding: 9px 10px; background: transparent; text-align: left; line-height: 1.2; }
+  .many .person:hover { background: var(--bg); }
+  .many .person[aria-pressed="true"] { background: var(--pc); color: var(--on-bar); }
+}
+
 /* slate */
 .slate { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; display: grid; grid-template-columns: minmax(0, 1fr); }
 @media (min-width: 880px) { .slate { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); } }
@@ -283,7 +302,13 @@ footer { font-family: var(--f-mono); font-size: 12px; color: var(--muted); displ
     <p class="fresh" id="fresh"></p>
   </header>
 
-  <nav class="people" id="people" aria-label="Čí směny zvýraznit"></nav>
+  <div class="layout" id="layout">
+  <aside class="side">
+    <p class="eyebrow side-h">Lidé</p>
+    <nav class="people" id="people" aria-label="Čí směny zvýraznit"></nav>
+    <label class="people-select" for="personSelect"><span>Člověk</span><select id="personSelect"></select></label>
+  </aside>
+  <div class="main">
 
   <section class="slate" id="slate" aria-live="polite"></section>
 
@@ -309,6 +334,8 @@ footer { font-family: var(--f-mono); font-size: 12px; color: var(--muted); displ
       <div class="card" id="checks"></div>
     </div>
   </section>
+  </div>
+  </div>
 
   <footer id="foot"></footer>
 </div>
@@ -441,6 +468,9 @@ footer { font-family: var(--f-mono); font-size: 12px; color: var(--muted); displ
   }
 
   function renderPeople() {
+    $('layout').classList.toggle('many', people.length > 5);
+    $('personSelect').innerHTML = people.map(p =>
+      `<option value="${esc(p)}"${p === state.person ? ' selected' : ''}>${esc(p)}</option>`).join('');
     $('people').innerHTML = people.map(p =>
       `<button class="person" type="button" style="--pc:${colorOf(p)}" data-p="${esc(p)}" aria-pressed="${p === state.person}"><span class="dot"></span>${esc(p)}</button>`
     ).join('');
@@ -702,14 +732,17 @@ footer { font-family: var(--f-mono); font-size: 12px; color: var(--muted); displ
     renderBoard();
   }
 
-  $('people').addEventListener('click', e => {
-    const b = e.target.closest('[data-p]');
-    if (!b) return;
-    state.person = b.dataset.p;
+  function setPerson(p) {
+    state.person = p;
     store.set('person.' + (DATA.slug || DATA.team), state.person);
     try { history.replaceState(null, '', '#' + slug(state.person)); } catch (err) { /* sandbox */ }
     renderAll();
+  }
+  $('people').addEventListener('click', e => {
+    const b = e.target.closest('[data-p]');
+    if (b) setPerson(b.dataset.p);
   });
+  $('personSelect').addEventListener('change', e => setPerson(e.target.value));
   $('months').addEventListener('click', e => {
     const b = e.target.closest('[data-m]');
     if (!b) return;
