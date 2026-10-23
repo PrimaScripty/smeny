@@ -1,7 +1,16 @@
 {
   "sheet_id": "ID_TABULKY",
   "team": "SPORT",
-  "default_person": "Martin Tomek",
+  "teams": {
+    "SPORT": {
+      "slug": "sport",
+      "default_person": "Martin Tomek"
+    },
+    "DENNÍ": {
+      "slug": "denni",
+      "default_person": null
+    }
+  },
   "vacations_tab": "Plánované dovolené",
   "artifact_url": null
 }

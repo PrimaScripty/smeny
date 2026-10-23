@@ -1,29 +1,34 @@
 ---
 name: smeny
-description: Rozpis směn týmu SPORT (grafika Prima Sport) z Google tabulky. Kdy má Martin Tomek (nebo kdokoli z týmu) další směnu, kdo dělá v určitý den, kolik hodin má v měsíci, export směn do Google Kalendáře (.ics) a obnova přehledu „Směny SPORT“ (Artifact). Použij, když se uživatel ptá na směny, službu, rozpis, „kdy jdu do práce“, „mám volno?“, „kdo je v sobotu“, „hodiny v listopadu“, „dej směny do kalendáře“, „obnov přehled směn“, nebo napíše /smeny.
+description: Rozpis směn týmů SPORT a DENNÍ (grafika Prima Sport) z Google tabulky. Kdy má Martin Tomek (nebo kdokoli z týmu) další směnu, kdo dělá v určitý den, kolik hodin má v měsíci, export směn do Google Kalendáře (.ics) a obnova přehledu „Směny SPORT“ (Artifact). Použij, když se uživatel ptá na směny, službu, rozpis, „kdy jdu do práce“, „mám volno?“, „kdo je v sobotu“, „hodiny v listopadu“, „dej směny do kalendáře“, „obnov přehled směn“, nebo napíše /smeny.
 ---
 
-# Směny SPORT
+# Směny SPORT a DENNÍ
 
 Zdroj je Google tabulka (`sheet_id` v `config.json`), veřejně čitelná přes CSV export, takže není potřeba přihlášení.
-Měsíce jsou na listech `SPORT <měsíc> <rok>` (např. „SPORT listopad 2026“) a skript nové měsíce najde sám.
-Ve výchozím nastavení je osoba **Martin Tomek** (`default_person`). Když uživatel říká „já“ nebo „moje směny“, myslí tím ji, pokud neřekne jinak.
+Měsíce jsou na listech `<TÝM> <měsíc> <rok>` (např. „SPORT listopad 2026“, „DENNÍ říjen 2026“) a skript nové měsíce najde sám. Týmy jsou v `config.json` pod `teams`.
+Výchozí tým je SPORT (`team`) a výchozí osoba **Martin Tomek**. DENNÍ výchozí osobu nemá. Když uživatel říká „já“ nebo „moje směny“, myslí tím ji, pokud neřekne jinak.
 
 ## Jak číst tabulku
 
 - Hlavička tvoří 2 řádky: jméno a příjmení. Pod nimi je jeden řádek na každý den (číslo dne, den v týdnu, buňka pro každého člověka). Za lidmi je sloupec se součtem dne a poznámka (např. „Zaučení AL“).
 - **Číslo v buňce je počet hodin.** Čas začátku a konce je v legendě pod rozpisem. Teď platí: všední dny `8` = 6:00–14:00, `7` = 13:00–20:00, `14` = 6:00–20:00, víkend `12` = 6:00–18:00. Skript legendu čte z listu, takže změny pozná sám.
+- V DENNÍ má stejný kód víc časů (`7` = 12–19 nebo 15–22, `10` = 8–18 nebo 9–19). Rozhoduje **barva buňky**, která odpovídá barvě kódu v legendě. Skript barvy čte z HTML náhledu listu. Když barva nerozhodne, výstup ukáže obě možnosti. Neodhaduj, řekni to tak.
+- Prázdné barevné buňky jsou stavy z legendy: červená = vyblokováno, tyrkysová = dělá SPORT, žlutá nebo oranžová = dělá DENNÍ.
 - Kódy, které v legendě nejsou (např. `3`, `13`), mají jen délku, ne čas. Řekni to tak a čas si nevymýšlej.
 - Pod rozpisem jsou poznámky k lidem (např. „3 školení Piero“, „1 AI 1 Laver Cup 1 NHL“) a řádek součtů hodin.
-- Listy `DENNÍ …` patří jinému týmu se sporou legendou (stejný kód tam znamená víc časů). Skill je nepodporuje. „Martin“ v listech DENNÍ je Martin Málek, ne Martin Tomek.
+- Pod rozpisem DENNÍ jsou i číselné řádky (online, částky). Skript z nich nebere nic kromě řádku součtů hodin a nikam je nepropisuj.
+- „Martin“ v DENNÍ je Martin Málek, ne Martin Tomek. Jan Smutný je v obou týmech.
 
 ## Skript
 
 Vždy ho spusť znovu, rozpis se mění. Nikdy neodpovídej z paměti ani z dřívějšího výstupu.
 
 ```bash
-python ~/.claude/skills/smeny/scripts/smeny.py <příkaz>
+python ~/.claude/skills/smeny/scripts/smeny.py [--team sport|denni] <příkaz>
 ```
+
+Bez `--team` platí SPORT. Když se ptá na někoho z DENNÍ, přidej `--team denni`.
 
 | Příkaz | K čemu |
 |---|---|
@@ -34,6 +39,7 @@ python ~/.claude/skills/smeny/scripts/smeny.py <příkaz>
 | `json [--out SOUBOR]` | všechna data, když potřebuješ něco, co ostatní příkazy nevypíšou |
 | `ics [--person JMÉNO] [--since DATUM] --out SOUBOR` | export do kalendáře |
 | `build --out SOUBOR [--person JMÉNO]` | HTML přehled (šablona `assets/wrapper.html`) |
+| `site --out SLOŽKA` | veřejný web: rozcestník, `sport/` a `denni/` (to dělá GitHub Actions) |
 | `set-artifact URL` | uloží URL publikovaného přehledu do `config.json` |
 
 Jména se hledají bez ohledu na diakritiku a stačí jednoznačná část (`tomek`, `bláha`, `alex`).
@@ -67,5 +73,14 @@ Pro Artifact **nepoužívej** `--standalone`, protože Artifact si kostru strán
 
 `smeny.cmd` ve složce skillu stáhne čerstvá data, vyrobí `out/smeny-sport.html` (`build --standalone`, tedy celý dokument s `<!doctype>` a kódováním) a otevře ho v prohlížeči. Uživatel ho spouští dvojklikem, Claude k tomu není potřeba.
 Když uživatel chce „otevřít přehled u sebe“, spusť `smeny.cmd`. Soubor otevřený přímo z disku si data z Googlu stáhnout nemůže, protože prohlížeč to u `file://` blokuje. Proto se data obnovují tím, že se soubor vyrobí znovu.
+
+## Veřejný web (GitHub Pages)
+
+Repozitář je na GitHubu u účtu `PrimaScripty`, web má rozcestník a stránky `/sport/` a `/denni/` (adresu najdeš v Settings → Pages). GitHub Actions ([pages.yml](.github/workflows/pages.yml)) web každých 30 minut a při každém pushi postaví znovu příkazem `site`. Claude k tomu není potřeba.
+
+- Číslo tabulky je v repozitáři jen jako proměnná `SMENY_SHEET_ID` (Settings → Secrets and variables → Actions → Variables). V `config.json` je lokálně, soubor je v `.gitignore`. Nikdy ho nedávej do commitu ani do veřejného výstupu.
+- Veřejné stránky (`--public`, `site`) vynechají odkaz na zdrojovou tabulku a plánované dovolené a přidá `noindex`. Na webu jsou jména a směny lidí z týmu, takže před změnou toho, co se zveřejňuje, se zeptej.
+- Změna kódu nebo šablony se na web dostane pushem na `main`. Push i další zápisy na GitHub si uživatel dělá sám v Terminálu, systém je Claudovi blokuje. Stav sestavení jde číst bez tokenu: `https://api.github.com/repos/PrimaScripty/smeny/actions/runs`.
+- GitHub vypne plánovaná spuštění po 60 dnech bez aktivity v repozitáři. Pak je potřeba workflow znovu zapnout v záložce Actions.
 
 Šablonu přehledu upravuj v `assets/wrapper.html`. Data se vkládají místo zástupného textu `__SMENY_DATA__`, který v šabloně musí zůstat přesně jednou.

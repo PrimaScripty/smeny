@@ -28,7 +28,7 @@ jobs:
       - name: Postavit přehled z tabulky
         env:
           SMENY_SHEET_ID: ${{ vars.SMENY_SHEET_ID }}
-        run: python3 scripts/smeny.py build --public --out _site/index.html
+        run: python3 scripts/smeny.py site --out _site
 
       - uses: actions/configure-pages@v5
 

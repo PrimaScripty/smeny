@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """Směny SPORT – čte rozpis směn z Google tabulky (veřejný CSV export).
 
-Příkazy (viz SKILL.md):
+Příkazy (viz SKILL.md), tým volí --team (sport, denni) před příkazem:
   next  [--person JMÉNO] [-n 5]        nejbližší směny
   day   DATUM                           kdo dělá v daný den (dnes, zítra, pátek, 23.10., 2026-10-23)
   month [MĚSÍC] [--person JMÉNO]        měsíc (2026-11, listopad, 11); s osobou jen její směny
   json  [--out SOUBOR]                  všechna data jako JSON
   ics   [--person JMÉNO] [--since DATUM] --out SOUBOR   export do kalendáře
   build --out SOUBOR [--person JMÉNO] [--standalone|--public]   HTML přehled (šablona assets/wrapper.html)
+  site  --out SLOŽKA                    veřejný web: rozcestník + složka pro každý tým (GitHub Pages)
   check                                 kontrola tabulky (součty, neexistující dny, neznámé kódy)
   set-artifact URL                      uloží URL publikovaného přehledu do config.json
 """
@@ -103,6 +104,8 @@ def fmt_time(t: str) -> str:
 def fmt_shift(s: dict) -> str:
     if s.get("start"):
         return f"{fmt_time(s['start'])}–{fmt_time(s['end'])}"
+    if s.get("options"):
+        return f"{fmt_num(s['hours'])} h, " + " nebo ".join(f"{fmt_time(a)}–{fmt_time(b)}" for a, b in s["options"])
     if s.get("hours") is not None:
         return f"{fmt_num(s['hours'])} h, čas neuveden"
     return s["raw"]
@@ -168,6 +171,36 @@ def fetch_rows(sheet_id: str, gid: str) -> list[list[str]]:
     return [r + [""] * (width - len(r)) for r in rows]
 
 
+def fetch_colors(sheet_id: str, gid: str) -> dict[tuple[int, int], str]:
+    """Barvy pozadí buněk z HTML náhledu listu: {(řádek, sloupec): "#rrggbb"}, bílé vynechané.
+
+    Stejný kód může v legendě znamenat víc časů (DENNÍ: 7 = 12–19 nebo 16–23) a rozliší je jen barva buňky.
+    Prázdné barevné buňky značí stav (vyblokováno, dělá v jiném týmu)."""
+    try:
+        page = fetch(f"https://docs.google.com/spreadsheets/d/{sheet_id}/htmlview/sheet?headers=false&gid={gid}")
+    except SystemExit:
+        return {}
+    css = {}
+    for cls, body in re.findall(r"\.(s\d+)\{([^}]*)\}", page):
+        m = re.search(r"background-color:\s*(#[0-9a-fA-F]{6})", body)
+        if m:
+            css[cls] = m.group(1).lower()
+    colors: dict[tuple[int, int], str] = {}
+    for tr in re.findall(r"<tr[^>]*>(.*?)</tr>", page, re.S):
+        rh = re.search(rf'<th[^>]*id="{gid}R(\d+)"', tr)
+        if not rh:
+            continue
+        r, c = int(rh.group(1)), 0
+        for attrs in re.findall(r"<td([^>]*)>", tr):
+            cls = re.search(r'class="[^"]*?\b(s\d+)\b', attrs)
+            color = css.get(cls.group(1)) if cls else None
+            if color and color != "#ffffff":
+                colors[(r, c)] = color
+            span = re.search(r'colspan="(\d+)"', attrs)
+            c += int(span.group(1)) if span else 1
+    return colors
+
+
 def month_of_tab(name: str, team: str):
     m = re.fullmatch(rf"{re.escape(team)}\s+(\S+)\s+(\d{{4}})", norm(name), re.I)
     if m and m.group(1).lower() in MONTHS:
@@ -177,9 +210,16 @@ def month_of_tab(name: str, team: str):
 
 # ---------- parsování ----------
 
-def parse_month(rows: list[list[str]], year: int, month: int) -> dict:
-    """List „SPORT <měsíc> <rok>“: 2 řádky jmen, řádky dnů, pod nimi poznámky, součty a legenda kódů."""
+def parse_month(rows: list[list[str]], year: int, month: int, colors: dict | None = None) -> dict:
+    """List „<TÝM> <měsíc> <rok>“: 2 řádky jmen, řádky dnů, pod nimi poznámky, součty a legenda kódů.
+
+    Časy směn se doplní až v resolve_month, protože stavové barvy se sbírají ze všech listů."""
+    colors = colors or {}
     warnings: list[str] = []
+    status_defs: dict[str, str] = {}
+    for r in (0, 1):
+        if norm(rows[r][0]) and (r, 0) in colors:
+            status_defs[colors[(r, 0)]] = norm(rows[r][0])
     head0, head1 = rows[0], rows[1]
     people: list[tuple[int, str]] = []
     for c in range(2, len(head0)):
@@ -224,28 +264,36 @@ def parse_month(rows: list[list[str]], year: int, month: int) -> dict:
             "weekend": date.weekday() >= 5,
             "total": total,
             "notes": notes,
-            "shifts": [{"person": name, "raw": norm(row[c])} for c, name in people if norm(row[c])],
+            "shifts": [{"person": name, "raw": norm(row[c]), "color": colors.get((i, c))}
+                       for c, name in people if norm(row[c])],
+            "marks": [{"person": name, "color": colors[(i, c)]}
+                      for c, name in people if not norm(row[c]) and (i, c) in colors],
         })
 
     # Pod dny: poznámky k lidem, řádek součtů, legenda (kód, od, do), sekce VÍKEND, DENNÍ VYBLOKOVÁNO.
-    legend: dict[str, dict[str, list[str]]] = {"weekday": {}, "weekend": {}}
+    legend: dict[str, list[dict]] = {"weekday": [], "weekend": []}
     totals: dict[str, float] = {}
     footnotes: dict[str, list[str]] = {name: [] for _, name in people}
     section: str | None = "weekday"
-    for row in rows[last_day_row + 1:]:
+    for r_i, row in enumerate(rows[last_day_row + 1:], start=last_day_row + 1):
         cells = [norm(v) for v in row]
         upper = [c.upper() for c in cells]
         if "VÍKEND" in upper:
             section = "weekend"
             continue
         if "VYBLOKOVÁNO" in upper:
+            # Řádek se stavovými barvami, např. „DENNÍ“ žlutě a „VYBLOKOVÁNO“ červeně.
+            for k, text in enumerate(cells):
+                if text and (r_i, k) in colors:
+                    status_defs[colors[(r_i, k)]] = "vyblokováno" if text.upper() == "VYBLOKOVÁNO" else text
             section = None
             continue
         for k in range(len(cells) - 2):
             code, start, end = to_num(cells[k]), to_time(cells[k + 1]), to_time(cells[k + 2])
             if code is not None and start and end:
-                if section:
-                    legend[section].setdefault(str(code), [start, end])
+                entry = {"code": str(code), "start": start, "end": end, "color": colors.get((r_i, k))}
+                if section and entry not in legend[section]:
+                    legend[section].append(entry)
                 break
         else:
             if cells[0]:
@@ -256,38 +304,10 @@ def parse_month(rows: list[list[str]], year: int, month: int) -> dict:
             if not totals and all(to_num(cells[c]) is not None for c, _ in people):
                 totals = {name: to_num(cells[c]) for c, name in people}
             else:
+                # Jen text; další číselné řádky (počty online, částky) se nikam nepropisují.
                 for name, v in vals.items():
-                    footnotes[name].append(v)
-
-    hours = {name: 0 for _, name in people}
-    counts = {name: 0 for _, name in people}
-    unknown: dict[str, list[str]] = {}
-    for day in days:
-        own, other = ("weekend", "weekday") if day["weekend"] else ("weekday", "weekend")
-        for s in day["shifts"]:
-            n = to_num(s["raw"])
-            s["hours"] = n
-            s["start"] = s["end"] = None
-            s["timeSource"] = None
-            if n is not None:
-                hours[s["person"]] += n
-                counts[s["person"]] += 1
-                key = str(n)
-                if key in legend[own]:
-                    s["start"], s["end"] = legend[own][key]
-                    s["timeSource"] = "legend"
-                elif key in legend[other]:
-                    s["start"], s["end"] = legend[other][key]
-                    s["timeSource"] = "legend-" + other
-            if not s["start"]:
-                unknown.setdefault(s["raw"], []).append(f"{s['person']} {day['day']}. {month}.")
-    for code, where in unknown.items():
-        what = "Kód" if to_num(code) is not None else "Hodnota"
-        more = f" a další ({len(where) - 4})" if len(where) > 4 else ""
-        warnings.append(f"{what} „{code}“ není v legendě, čas začátku neznám ({'; '.join(where[:4])}{more})")
-    for name, t in totals.items():
-        if t is not None and abs(hours[name] - t) > 0.01:
-            warnings.append(f"{name}: směny dávají {fmt_num(hours[name])} h, v řádku součtů je {fmt_num(t)} h.")
+                    if to_num(v) is None:
+                        footnotes[name].append(v)
 
     return {
         "key": f"{year}-{month:02d}",
@@ -297,12 +317,56 @@ def parse_month(rows: list[list[str]], year: int, month: int) -> dict:
         "people": [name for _, name in people],
         "legend": legend,
         "days": days,
-        "hours": hours,
-        "shiftCount": counts,
         "sheetTotals": totals,
         "footnotes": {n: v for n, v in footnotes.items() if v},
         "warnings": warnings,
+        "statusDefs": status_defs,
     }
+
+
+def resolve_month(m: dict, statuses: dict[str, str]) -> None:
+    """Doplní časy směn z legendy (při víc možnostech rozhodne barva buňky), stavy, hodiny a varování."""
+    month = m["month"]
+    hours = {p: 0 for p in m["people"]}
+    counts = {p: 0 for p in m["people"]}
+    unknown: dict[str, list[str]] = {}
+    ambiguous: dict[str, list[str]] = {}
+    for day in m["days"]:
+        own, other = ("weekend", "weekday") if day["weekend"] else ("weekday", "weekend")
+        for s in day["shifts"]:
+            n = to_num(s["raw"])
+            s.update(hours=n, start=None, end=None, options=None)
+            where = f"{s['person']} {day['day']}. {month}."
+            if n is not None:
+                hours[s["person"]] += n
+                counts[s["person"]] += 1
+                cands: list[dict] = []
+                for sec in (own, other):
+                    cands = [e for e in m["legend"][sec] if e["code"] == str(n)]
+                    if len(cands) > 1 and s.get("color"):
+                        cands = [e for e in cands if e["color"] == s["color"]] or cands
+                    if cands:
+                        break
+                if len(cands) == 1:
+                    s["start"], s["end"] = cands[0]["start"], cands[0]["end"]
+                elif cands:
+                    s["options"] = [[e["start"], e["end"]] for e in cands]
+                    ambiguous.setdefault(s["raw"], []).append(where)
+            if not s["start"] and not s["options"]:
+                unknown.setdefault(s["raw"], []).append(where)
+        day["statuses"] = [{"person": x["person"], "label": statuses[x["color"]]}
+                           for x in day.pop("marks", []) if x["color"] in statuses]
+    for code, where in unknown.items():
+        what = "Kód" if to_num(code) is not None else "Hodnota"
+        more = f" a další ({len(where) - 4})" if len(where) > 4 else ""
+        m["warnings"].append(f"{what} „{code}“ není v legendě, čas začátku neznám ({'; '.join(where[:4])}{more})")
+    for code, where in ambiguous.items():
+        more = f" a další ({len(where) - 4})" if len(where) > 4 else ""
+        m["warnings"].append(f"Kód „{code}“ má v legendě víc časů a barva buňky to nerozhodla ({'; '.join(where[:4])}{more})")
+    for name, t in m["sheetTotals"].items():
+        if t is not None and abs(hours[name] - t) > 0.01:
+            m["warnings"].append(f"{name}: směny dávají {fmt_num(hours[name])} h, v řádku součtů je {fmt_num(t)} h.")
+    m.update(hours=hours, shiftCount=counts)
 
 
 def parse_vacations(rows: list[list[str]]) -> dict[str, list[str]]:
@@ -317,37 +381,69 @@ def parse_vacations(rows: list[list[str]]) -> dict[str, list[str]]:
     return out
 
 
+def team_configs(cfg: dict) -> dict[str, dict]:
+    return cfg.get("teams") or {cfg["team"]: {"default_person": cfg.get("default_person")}}
+
+
 def load_all(cfg: dict) -> dict:
-    sid, team = cfg["sheet_id"], cfg["team"]
+    """Všechny týmy najednou: stavové barvy jednoho týmu (např. oranžová = DENNÍ) se používají i u druhého."""
+    sid = cfg["sheet_id"]
     tabs = list_tabs(sid)
-    months = []
-    for t in tabs:
-        ym = month_of_tab(t["name"], team)
-        if ym:
-            m = parse_month(fetch_rows(sid, t["gid"]), *ym)
-            m.update(tab=t["name"], gid=t["gid"])
-            months.append(m)
-    months.sort(key=lambda m: m["key"])
-    people: list[str] = []
-    for m in months:
-        people += [p for p in m["people"] if p not in people]
+    teams: dict[str, dict] = {}
+    statuses: dict[str, str] = {}
+    for team, tcfg in team_configs(cfg).items():
+        months = []
+        for t in tabs:
+            ym = month_of_tab(t["name"], team)
+            if ym:
+                m = parse_month(fetch_rows(sid, t["gid"]), *ym, colors=fetch_colors(sid, t["gid"]))
+                statuses.update(m.pop("statusDefs"))
+                m.update(tab=t["name"], gid=t["gid"])
+                months.append(m)
+        months.sort(key=lambda m: m["key"])
+        people: list[str] = []
+        for m in months:
+            people += [p for p in m["people"] if p not in people]
+        teams[team] = {"slug": tcfg.get("slug") or slug(team), "defaultPerson": tcfg.get("default_person"),
+                       "people": people, "months": months}
+    for t in teams.values():
+        for m in t["months"]:
+            resolve_month(m, statuses)
 
     vacations: dict[str, list[str]] = {}
     vac_tab = next((t for t in tabs if fold(t["name"]) == fold(cfg.get("vacations_tab"))), None)
     if vac_tab:
-        by_fold = {fold(p): p for p in people}
+        everyone = {fold(p): p for t in teams.values() for p in t["people"]}
         for name, vals in parse_vacations(fetch_rows(sid, vac_tab["gid"])).items():
-            if fold(name) in by_fold:
-                vacations[by_fold[fold(name)]] = vals
+            if fold(name) in everyone:
+                vacations[everyone[fold(name)]] = vals
 
     return {
         "generated": dt.datetime.now().astimezone().isoformat(timespec="minutes"),
-        "team": team,
         "sheetUrl": f"https://docs.google.com/spreadsheets/d/{sid}/edit",
-        "defaultPerson": cfg.get("default_person"),
-        "people": people,
-        "months": months,
+        "teams": teams,
         "vacations": vacations,
+    }
+
+
+def team_view(data: dict, query: str | None, default: str | None) -> dict:
+    """Data jednoho týmu ve tvaru, se kterým pracují příkazy i šablona."""
+    teams = data["teams"]
+    q = fold(query or default or next(iter(teams)))
+    name = next((n for n, t in teams.items() if q in (fold(n), t["slug"])), None)
+    if name is None:
+        raise SystemExit(f"Tým „{query}“ neznám. K dispozici: {', '.join(t['slug'] for t in teams.values())}.")
+    t = teams[name]
+    return {
+        "generated": data["generated"],
+        "team": name,
+        "slug": t["slug"],
+        "teams": [{"name": n, "slug": x["slug"]} for n, x in teams.items()],
+        "sheetUrl": data["sheetUrl"],
+        "defaultPerson": t["defaultPerson"],
+        "people": t["people"],
+        "months": t["months"],
+        "vacations": {p: v for p, v in data["vacations"].items() if p in t["people"]},
     }
 
 
@@ -378,6 +474,8 @@ def shift_bounds(day: dict, s: dict):
 def find_person(data: dict, query: str | None) -> str:
     q = fold(query or data.get("defaultPerson") or "")
     people = data["people"]
+    if not q:
+        raise SystemExit(f"Tým {data['team']} nemá výchozí osobu, zadej --person. Lidé: {', '.join(people)}.")
     exact = [p for p in people if fold(p) == q]
     if exact:
         return exact[0]
@@ -463,7 +561,9 @@ def cmd_day(data, args):
     if not day["shifts"]:
         print("  Nikdo nemá směnu.")
     for s in sorted(day["shifts"], key=lambda s: s["start"] or "99"):
-        print(f"  {s['person']:<16} {fmt_shift(s)}  (kód {s['raw']})")
+        print(f"  {s['person']:<20} {fmt_shift(s)}  (kód {s['raw']})")
+    for x in day.get("statuses", []):
+        print(f"  {x['person']:<20} {x['label']}")
     if day["notes"]:
         print("  pozn.: " + "; ".join(day["notes"]))
 
@@ -575,26 +675,80 @@ def cmd_ics(data, args):
     print(f"{out} – {count} {plural(count, 'směna', 'směny', 'směn')} pro {person} od {fmt_date(since)}")
 
 
+ROBOTS = '<meta charset="utf-8">\n<meta name="robots" content="noindex,nofollow">'
+
+
+def render_html(data: dict, standalone: bool, public: bool) -> str:
+    if public:
+        # Veřejná stránka: bez odkazu na zdrojovou tabulku (obsahuje i další listy) a bez plánovaných dovolených.
+        data = {**data, "public": True, "sheetUrl": "", "vacations": {}}
+        standalone = True
+    payload = json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("<", "\\u003c")
+    html = TEMPLATE_PATH.read_text(encoding="utf-8").replace("__SMENY_DATA__", payload, 1)
+    if standalone:
+        head = STANDALONE_HEAD.replace('<meta charset="utf-8">', ROBOTS) if public else STANDALONE_HEAD
+        html = head + html + "\n</body>\n</html>\n"
+    return html
+
+
+def write(path: pathlib.Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+
+
 def cmd_build(data, args):
     if args.person:
         data["defaultPerson"] = find_person(data, args.person)
-    if args.public:
-        # Veřejná stránka: bez odkazu na zdrojovou tabulku (obsahuje i další listy) a bez plánovaných dovolených.
-        data["public"] = True
-        data["sheetUrl"] = ""
-        data["vacations"] = {}
-        args.standalone = True
-    payload = json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("<", "\\u003c")
-    html = TEMPLATE_PATH.read_text(encoding="utf-8").replace("__SMENY_DATA__", payload, 1)
-    if args.standalone:
-        head = STANDALONE_HEAD
-        if args.public:
-            head = head.replace('<meta charset="utf-8">', '<meta charset="utf-8">\n<meta name="robots" content="noindex,nofollow">')
-        html = head + html + "\n</body>\n</html>\n"
     out = pathlib.Path(args.out)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(html, encoding="utf-8")
-    print(f"{out} – {len(data['months'])} měs., data z {data['generated']}")
+    write(out, render_html(data, args.standalone, args.public))
+    print(f"{out} – tým {data['team']}, {len(data['months'])} měs., data z {data['generated']}")
+
+
+INDEX_HTML = """<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex,nofollow">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Směny</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500&display=swap">
+<style>
+:root{--bg:#EEF1F5;--surface:#FFFFFF;--ink:#121620;--muted:#596274;--line:#D8DDE5;--accent:#2E58E0;
+--f-display:"Barlow Condensed","Arial Narrow",sans-serif;--f-body:"Barlow",system-ui,sans-serif}
+@media (prefers-color-scheme:dark){:root{--bg:#0D1016;--surface:#151A22;--ink:#E6EAF0;--muted:#97A1B1;--line:#283040;--accent:#7F9DFF;color-scheme:dark}}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body)}
+main{max-width:720px;margin:0 auto;padding:40px 16px;display:flex;flex-direction:column;gap:20px}
+p{margin:0}.eyebrow{font-family:var(--f-display);font-weight:600;font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+h1{font-family:var(--f-display);font-weight:700;font-size:52px;line-height:.9;text-transform:uppercase;margin:4px 0 0}
+.teams{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:12px}
+a.team{display:flex;flex-direction:column;gap:6px;padding:20px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);text-decoration:none}
+a.team:hover,a.team:focus-visible{border-color:var(--accent);outline:none}
+a.team b{font-family:var(--f-display);font-weight:700;font-size:36px;line-height:1;text-transform:uppercase}
+a.team span{color:var(--muted);font-size:14px}
+</style>
+</head>
+<body>
+<main>
+<div><p class="eyebrow">Rozpis směn · grafika</p><h1>Směny</h1></div>
+<div class="teams">__TEAMS__</div>
+</main>
+</body>
+</html>
+"""
+
+
+def cmd_site(data_all, args):
+    out = pathlib.Path(args.out)
+    cards = []
+    for name, t in data_all["teams"].items():
+        view = team_view(data_all, t["slug"], None)
+        write(out / t["slug"] / "index.html", render_html(view, True, True))
+        months = ", ".join(m["label"] for m in view["months"]) or "zatím bez rozpisu"
+        cards.append(f'<a class="team" href="./{t["slug"]}/"><b>{name}</b>'
+                     f'<span>{len(view["people"])} lidí · {months}</span></a>')
+        print(f"{out / t['slug'] / 'index.html'} – tým {name}, {len(view['months'])} měs.")
+    write(out / "index.html", INDEX_HTML.replace("__TEAMS__", "".join(cards)))
+    print(f"{out / 'index.html'} – rozcestník, data z {data_all['generated']}")
 
 
 def cmd_check(data, args):
@@ -602,8 +756,9 @@ def cmd_check(data, args):
     for m in data["months"]:
         print(f"\n{m['label']} (list „{m['tab']}“): {len(m['days'])} dnů, "
               + ", ".join(f"{p} {fmt_num(h)} h" for p, h in m["hours"].items()))
-        print("  legenda: " + "; ".join(f"{sec} {code} = {fmt_time(a)}–{fmt_time(b)}"
-                                       for sec, codes in m["legend"].items() for code, (a, b) in codes.items()))
+        print("  legenda: " + "; ".join(f"{sec} {e['code']} = {fmt_time(e['start'])}–{fmt_time(e['end'])}"
+                                       + (f" ({e['color']})" if e["color"] else "")
+                                       for sec, entries in m["legend"].items() for e in entries))
         for w in m["warnings"] or ["bez problémů"]:
             print(f"  ! {w}" if m["warnings"] else f"  {w}")
     if data["vacations"]:
@@ -614,6 +769,7 @@ def main():
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser(description="Směny z Google tabulky")
+    ap.add_argument("--team", help="tým: sport, denni (výchozí podle config.json)")
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("next"); p.add_argument("--person"); p.add_argument("-n", type=int, default=5)
     p = sub.add_parser("day"); p.add_argument("date", nargs="?", default="dnes")
@@ -624,6 +780,7 @@ def main():
     p.add_argument("--standalone", action="store_true", help="celý HTML dokument pro otevření mimo Artifact")
     p.add_argument("--public", action="store_true", help="verze pro veřejný web: bez odkazu na tabulku a bez dovolených, noindex")
     sub.add_parser("check")
+    p = sub.add_parser("site"); p.add_argument("--out", required=True)
     p = sub.add_parser("set-artifact"); p.add_argument("url")
     args = ap.parse_args()
 
@@ -633,7 +790,11 @@ def main():
         save_config(cfg)
         print(f"Uloženo: {args.url}")
         return
-    data = load_all(cfg)
+    data_all = load_all(cfg)
+    if args.cmd == "site":
+        cmd_site(data_all, args)
+        return
+    data = team_view(data_all, args.team, cfg.get("team"))
     {"next": cmd_next, "day": cmd_day, "month": cmd_month, "json": cmd_json, "ics": cmd_ics,
      "build": cmd_build, "check": cmd_check}[args.cmd](data, args)
 

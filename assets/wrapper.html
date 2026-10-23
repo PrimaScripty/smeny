@@ -17,7 +17,7 @@
   --tally-soft: #FCEBEA;
   --on-tally: #FFFFFF;
   --on-bar: #FFFFFF;
-  --p1: #2E58E0; --p2: #0B8371; --p3: #A35C04; --p4: #8A3CC4; --p5: #B8325F; --p6: #4A6F22;
+  --p1: #2E58E0; --p2: #0B8371; --p3: #A35C04; --p4: #8A3CC4; --p5: #B8325F; --p6: #4A6F22; --p7: #0E7490; --p8: #9A3412; --p9: #4338CA; --p10: #7A6A08;
   --f-display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
   --f-body: "Barlow", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --f-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
@@ -27,7 +27,7 @@
     --bg: #0D1016; --surface: #151A22; --surface-2: #11151C; --ink: #E6EAF0; --muted: #97A1B1;
     --line: #283040; --line-soft: #1D2430; --weekend: #121823; --tally: #FF5A52; --tally-soft: #2C1514;
     --on-tally: #1A0605; --on-bar: #0D1016;
-    --p1: #7F9DFF; --p2: #38CCB3; --p3: #F1A94C; --p4: #C290F7; --p5: #F27DA5; --p6: #9DCC6B;
+    --p1: #7F9DFF; --p2: #38CCB3; --p3: #F1A94C; --p4: #C290F7; --p5: #F27DA5; --p6: #9DCC6B; --p7: #5BC8DE; --p8: #F39A6B; --p9: #A5A9FF; --p10: #D9C45A;
     color-scheme: dark;
   }
 }
@@ -35,7 +35,7 @@
   --bg: #0D1016; --surface: #151A22; --surface-2: #11151C; --ink: #E6EAF0; --muted: #97A1B1;
   --line: #283040; --line-soft: #1D2430; --weekend: #121823; --tally: #FF5A52; --tally-soft: #2C1514;
   --on-tally: #1A0605; --on-bar: #0D1016;
-  --p1: #7F9DFF; --p2: #38CCB3; --p3: #F1A94C; --p4: #C290F7; --p5: #F27DA5; --p6: #9DCC6B;
+  --p1: #7F9DFF; --p2: #38CCB3; --p3: #F1A94C; --p4: #C290F7; --p5: #F27DA5; --p6: #9DCC6B; --p7: #5BC8DE; --p8: #F39A6B; --p9: #A5A9FF; --p10: #D9C45A;
   color-scheme: dark;
 }
 
@@ -218,6 +218,14 @@ td.sel .code { background: var(--pc); border-color: var(--pc); color: var(--on-b
 @media (min-width: 600px) { .dd-list li { grid-template-columns: auto minmax(0, 12rem) 9rem auto; } .dc { grid-column: auto; } }
 .dd-note { font-size: 14px; color: var(--muted); }
 
+.me.stat { background: transparent; color: var(--muted); border: 1px solid var(--line); font-family: var(--f-display); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; font-size: 12px; }
+.tag.status { border-style: solid; background: var(--surface-2); color: var(--muted); }
+.teams { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.teams a, .teams span { font-family: var(--f-display); font-weight: 700; font-size: 15px; letter-spacing: .08em; text-transform: uppercase; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--line); text-decoration: none; color: var(--muted); }
+.teams a:hover { color: var(--ink); border-color: var(--muted); }
+.teams span { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+.swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; border: 1px solid var(--line); vertical-align: -1px; margin-right: 6px; }
+
 /* spodní karty */
 .info { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
 @media (min-width: 880px) { .info { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); } }
@@ -253,6 +261,7 @@ footer { font-family: var(--f-mono); font-size: 12px; color: var(--muted); displ
     <div>
       <p class="eyebrow">Rozpis směn · grafika</p>
       <h1>Směny <span id="team">SPORT</span></h1>
+      <nav class="teams" id="teams" aria-label="Tým" hidden></nav>
     </div>
     <p class="fresh" id="fresh"></p>
   </header>
@@ -310,7 +319,9 @@ footer { font-family: var(--f-mono); font-size: 12px; color: var(--muted); displ
   const hShort = t => { const [h, m] = t.split(':'); return m === '00' ? `${+h}` : `${+h}:${m}`; };
   const toH = t => { const [h, m] = t.split(':').map(Number); return h + m / 60; };
   const vAt = t => { const h = +t.split(':')[0]; return ([2, 3, 4, 12, 13, 14].includes(h) || h >= 20) ? 've' : 'v'; };
-  const timeLabel = s => s.start ? `${hm(s.start)}–${hm(s.end)}` : (s.hours != null ? `${num(s.hours)} h, čas neuveden` : s.raw);
+  const timeLabel = s => s.start ? `${hm(s.start)}–${hm(s.end)}`
+    : s.options ? `${num(s.hours)} h, ${s.options.map(o => `${hm(o[0])}–${hm(o[1])}`).join(' nebo ')}`
+    : (s.hours != null ? `${num(s.hours)} h, čas neuveden` : s.raw);
   const timeShort = s => s.start ? `${hShort(s.start)}–${hShort(s.end)}` : (s.hours != null ? `${num(s.hours)} h` : s.raw);
   const parseDate = iso => { const [y, m, d] = iso.split('-').map(Number); return new Date(y, m - 1, d); };
   const isoOf = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -342,7 +353,7 @@ footer { font-family: var(--f-mono); font-size: 12px; color: var(--muted); displ
   };
 
   const people = DATA.people;
-  const colorOf = p => `var(--p${(Math.max(0, people.indexOf(p)) % 6) + 1})`;
+  const colorOf = p => `var(--p${(Math.max(0, people.indexOf(p)) % 10) + 1})`;
   const initials = p => p.split(' ').map(w => w[0]).join('').toUpperCase();
 
   const SH = [];
@@ -355,7 +366,7 @@ footer { font-family: var(--f-mono); font-size: 12px; color: var(--muted); displ
   })));
   SH.sort((a, b) => a.t0 - b.t0);
 
-  const legendTimes = DATA.months.flatMap(m => Object.values(m.legend || {}).flatMap(sec => Object.values(sec)));
+  const legendTimes = DATA.months.flatMap(m => Object.values(m.legend || {}).flatMap(sec => (sec || []).map(e => [e.start, e.end])));
   let H0 = 6, H1 = 20;
   if (legendTimes.length) {
     H0 = Math.floor(Math.min(...legendTimes.map(t => toH(t[0]))));
@@ -368,7 +379,7 @@ footer { font-family: var(--f-mono); font-size: 12px; color: var(--muted); displ
     const h = location.hash.slice(1);
     const byHash = people.find(p => slug(p) === h);
     if (byHash) return byHash;
-    const saved = store.get('person');
+    const saved = store.get('person.' + (DATA.slug || DATA.team));
     if (saved && people.includes(saved)) return saved;
     return people.includes(DATA.defaultPerson) ? DATA.defaultPerson : people[0];
   }
@@ -395,6 +406,14 @@ footer { font-family: var(--f-mono); font-size: 12px; color: var(--muted); displ
 
   function renderHeader() {
     $('team').textContent = DATA.team || '';
+    document.title = `Směny ${DATA.team || ''}`.trim();
+    const tn = $('teams');
+    if (DATA.public && (DATA.teams || []).length > 1) {
+      tn.hidden = false;
+      tn.innerHTML = DATA.teams.map(t => t.slug === DATA.slug
+        ? `<span aria-current="page">${esc(t.name)}</span>`
+        : `<a href="../${esc(t.slug)}/">${esc(t.name)}</a>`).join('');
+    }
     const g = new Date(DATA.generated), now = new Date();
     const stale = now - g > (DATA.public ? 4 * 36e5 : 2 * 864e5);
     const f = $('fresh');
@@ -508,6 +527,7 @@ footer { font-family: var(--f-mono); font-size: 12px; color: var(--muted); displ
         tags.push(`<span class="tag${sel}" style="${style}" title="${title}"><span class="dot"></span>${esc(initials(s.person))} · ${esc(timeShort(s))}</span>`);
       });
       d.notes.forEach(n => tags.push(`<span class="tag note">${esc(n)}</span>`));
+      (d.statuses || []).forEach(x => tags.push(`<span class="tag status${x.person === state.person ? ' sel' : ''}" style="--pc:${colorOf(x.person)}" title="${esc(x.person + ': ' + x.label)}"><span class="dot"></span>${esc(initials(x.person))} · ${esc(x.label)}</span>`));
       let nowLine = '';
       if (d.date === todayIso) {
         const h = now.getHours() + now.getMinutes() / 60;
@@ -531,8 +551,11 @@ footer { font-family: var(--f-mono); font-size: 12px; color: var(--muted); displ
       const cells = ps.map(p => {
         const s = d.shifts.find(x => x.person === p);
         const sel = p === state.person ? 'sel' : '';
-        if (!s) return `<td class="${sel}"></td>`;
-        return `<td class="${sel}" style="--pc:${colorOf(p)}"><span class="cell"><span class="code">${esc(s.raw)}</span><span class="t">${esc(s.start ? timeShort(s) : 'bez času')}</span></span></td>`;
+        if (!s) {
+          const st = (d.statuses || []).find(x => x.person === p);
+          return `<td class="${sel}">${st ? `<span class="small">${esc(st.label)}</span>` : ''}</td>`;
+        }
+        return `<td class="${sel}" style="--pc:${colorOf(p)}"><span class="cell"><span class="code">${esc(s.raw)}</span><span class="t">${esc(s.start ? timeShort(s) : s.options ? s.options.map(o => `${hShort(o[0])}–${hShort(o[1])}`).join(' / ') : 'bez času')}</span></span></td>`;
       }).join('');
       return `<tr class="${cls}"><td class="d">${date.getDate()}.<span>${WD[date.getDay()]}</span></td>${cells}<td class="small">${esc(d.notes.join('; '))}</td></tr>`;
     }).join('');
@@ -552,6 +575,7 @@ footer { font-family: var(--f-mono); font-size: 12px; color: var(--muted); displ
       const date = new Date(m.year, m.month - 1, n), iso = isoOf(date);
       const d = byDate[iso] || { shifts: [], notes: [] };
       const mine = d.shifts.find(s => s.person === state.person);
+      const myStat = (d.statuses || []).find(x => x.person === state.person);
       const others = state.onlyMine ? [] : d.shifts.filter(s => s.person !== state.person).sort(byStart);
       const cls = ['cell', date.getDay() % 6 === 0 && 'we', iso === todayIso && 'today', iso < todayIso && 'past'].filter(Boolean).join(' ');
       const label = `${dateLong(date)}: ${mine ? `${state.person} ${timeLabel(mine)}` : `${state.person} nemá směnu`}` +
@@ -559,6 +583,7 @@ footer { font-family: var(--f-mono); font-size: 12px; color: var(--muted); displ
       cells.push(`<button type="button" class="${cls}" data-day="${iso}" aria-pressed="${iso === state.day}" aria-label="${esc(label)}">` +
         `<span class="cn">${n}${d.notes.length ? '<span class="nm" aria-hidden="true"></span>' : ''}</span>` +
         (mine ? `<span class="me${mine.start ? '' : ' untimed'}" style="--pc:${colorOf(state.person)}"><span class="sm">${esc(timeShort(mine))}</span><span class="lg">${esc(mine.start ? timeLabel(mine) : timeShort(mine) + ', bez času')}</span></span>` : '') +
+        (!mine && myStat ? `<span class="me stat">${esc(myStat.label)}</span>` : '') +
         (others.length ? `<span class="oth">${others.map(o => `<span class="ol" style="--pc:${colorOf(o.person)}"><span class="dot"></span><span class="lg">${esc(initials(o.person))} <span class="t">${esc(timeShort(o))}</span></span></span>`).join('')}</span>` : '') +
         (d.notes.length ? `<span class="cnote lg">${esc(d.notes.join('; '))}</span>` : '') +
         '</button>');
@@ -577,6 +602,7 @@ footer { font-family: var(--f-mono); font-size: 12px; color: var(--muted); displ
     ).join('');
     return `<div class="day-detail" aria-live="polite"><p class="dd-date">${esc(dateLong(date))}<span>${esc(relDay(date, new Date()))}</span></p>` +
       (rows ? `<ul class="dd-list">${rows}</ul>` : '<p class="muted">Nikdo nemá směnu.</p>') +
+      ((d.statuses || []).length ? `<p class="dd-note">${d.statuses.map(x => `${esc(x.person)}: ${esc(x.label)}`).join(' · ')}</p>` : '') +
       (d.notes.length ? `<p class="dd-note">Poznámka: ${esc(d.notes.join('; '))}</p>` : '') + '</div>';
   }
 
@@ -595,13 +621,12 @@ footer { font-family: var(--f-mono); font-size: 12px; color: var(--muted); displ
   }
 
   function renderLegend(m) {
-    const sec = (title, obj) => {
-      const items = Object.entries(obj || {});
-      if (!items.length) return '';
-      return `<h3>${title}</h3>` + items.map(([code, [a, b]]) => `<div class="lg"><span class="code">${esc(code)}</span><span>${hm(a)}–${hm(b)}</span></div>`).join('');
+    const sec = (title, list) => {
+      if (!(list || []).length) return '';
+      return `<h3>${title}</h3>` + list.map(e => `<div class="lg"><span class="code">${esc(e.code)}</span><span>${e.color ? `<span class="swatch" style="background:${esc(e.color)}"></span>` : ''}${hm(e.start)}–${hm(e.end)}</span></div>`).join('');
     };
-    const unknown = [...new Set(m.days.flatMap(d => d.shifts.filter(s => !s.start).map(s => s.raw)))];
-    $('legend').innerHTML = `<h2>Kódy v tabulce</h2><p class="small">Číslo v buňce je počet hodin. Čas začátku se bere z legendy pod rozpisem.</p>` +
+    const unknown = [...new Set(m.days.flatMap(d => d.shifts.filter(s => !s.start && !s.options).map(s => s.raw)))];
+    $('legend').innerHTML = `<h2>Kódy v tabulce</h2><p class="small">Číslo v buňce je počet hodin. Čas se bere z legendy pod rozpisem, a když má kód víc časů, rozhodne barva buňky.</p>` +
       sec('Pracovní dny', m.legend.weekday) + sec('Víkend', m.legend.weekend) +
       (unknown.length ? `<h3>Bez legendy</h3><p class="small">${unknown.map(esc).join(', ')}: délku známe, začátek ne.</p>` : '');
   }
@@ -646,7 +671,7 @@ footer { font-family: var(--f-mono); font-size: 12px; color: var(--muted); displ
     const b = e.target.closest('[data-p]');
     if (!b) return;
     state.person = b.dataset.p;
-    store.set('person', state.person);
+    store.set('person.' + (DATA.slug || DATA.team), state.person);
     try { history.replaceState(null, '', '#' + slug(state.person)); } catch (err) { /* sandbox */ }
     renderAll();
   });

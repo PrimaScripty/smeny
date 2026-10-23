@@ -1,12 +1,12 @@
 # Směny
 
-Přehled směn týmu SPORT z Google tabulky: další směna, měsíční kalendář, časová osa, hodiny a kontrola rozpisu. Je to také Claude skill `/smeny` (viz [SKILL.md](SKILL.md)).
+Přehled směn týmů SPORT a DENNÍ z Google tabulky: další směna, měsíční kalendář, časová osa, hodiny a kontrola rozpisu. Je to také Claude skill `/smeny` (viz [SKILL.md](SKILL.md)).
 
 ## Jak to funguje
 
-- `scripts/smeny.py` stáhne tabulku přes veřejný CSV export, najde listy `SPORT <měsíc> <rok>` a z legendy pod rozpisem určí časy směn. Používá jen standardní knihovnu Pythonu 3.
+- `scripts/smeny.py` stáhne tabulku přes veřejný CSV export, najde listy `<TÝM> <měsíc> <rok>` a z legendy pod rozpisem určí časy směn. Když má kód víc časů, rozhodne barva buňky z HTML náhledu listu. Používá jen standardní knihovnu Pythonu 3.
 - `assets/wrapper.html` je šablona přehledu. Data se do ní vloží při sestavení.
-- GitHub Actions ([pages.yml](.github/workflows/pages.yml)) přehled každých 30 minut sestaví znovu a nasadí na GitHub Pages.
+- GitHub Actions ([pages.yml](.github/workflows/pages.yml)) web (rozcestník, `/sport/`, `/denni/`) každých 30 minut sestaví znovu a nasadí na GitHub Pages.
 
 ## Nastavení repozitáře
 
