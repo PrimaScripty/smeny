@@ -22,20 +22,11 @@
   --f-body: "Barlow", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --f-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
 }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #0D1016; --surface: #151A22; --surface-2: #11151C; --ink: #E6EAF0; --muted: #97A1B1;
-    --line: #283040; --line-soft: #1D2430; --weekend: #121823; --tally: #FF5A52; --tally-soft: #2C1514;
-    --on-tally: #1A0605; --on-bar: #0D1016;
-    --p1: #7F9DFF; --p2: #38CCB3; --p3: #F1A94C; --p4: #C290F7; --p5: #F27DA5; --p6: #9DCC6B; --p7: #5BC8DE; --p8: #F39A6B; --p9: #A5A9FF; --p10: #D9C45A;
-    color-scheme: dark;
-  }
-}
 :root[data-theme="dark"] {
-  --bg: #0D1016; --surface: #151A22; --surface-2: #11151C; --ink: #E6EAF0; --muted: #97A1B1;
-  --line: #283040; --line-soft: #1D2430; --weekend: #121823; --tally: #FF5A52; --tally-soft: #2C1514;
-  --on-tally: #1A0605; --on-bar: #0D1016;
-  --p1: #7F9DFF; --p2: #38CCB3; --p3: #F1A94C; --p4: #C290F7; --p5: #F27DA5; --p6: #9DCC6B; --p7: #5BC8DE; --p8: #F39A6B; --p9: #A5A9FF; --p10: #D9C45A;
+  --bg: #05070A; --surface: #0F131A; --surface-2: #0A0D12; --ink: #F6F8FB; --muted: #B7C0CE;
+  --line: #3A4455; --line-soft: #262E3B; --weekend: #0C1017; --tally: #FF5C54; --tally-soft: #3A1210;
+  --on-tally: #1A0605; --on-bar: #05070A;
+  --p1: #8FA9FF; --p2: #45DCC2; --p3: #FFB65C; --p4: #CF9CFF; --p5: #FF8DB4; --p6: #ACDD78; --p7: #6AD7EC; --p8: #FFA97A; --p9: #B3B6FF; --p10: #E8D366;
   color-scheme: dark;
 }
 
@@ -65,24 +56,25 @@ h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(36px, 6vw
 .person[aria-pressed="true"] { background: var(--pc); border-color: var(--pc); color: var(--on-bar); }
 .person[aria-pressed="true"] .dot { background: var(--on-bar); }
 
-/* Hodně lidí (DENNÍ): na počítači boční panel, na mobilu výběr ze seznamu místo řady tlačítek */
+/* Výběr člověka: málo lidí = tlačítka, hodně lidí (DENNÍ) = jedno tlačítko, které rozbalí mřížku jmen */
 .layout, .main { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
 @media (min-width: 760px) { .layout, .main { gap: 22px; } }
-.side-h, .people-select { display: none; }
-.many .people { display: none; }
-.many .people-select { display: flex; align-items: center; gap: 10px; }
-.people-select span { font-family: var(--f-display); font-weight: 600; font-size: 13px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
-.people-select select { flex: 1; min-width: 0; font: 600 15px/1.2 var(--f-body); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
-@media (min-width: 960px) {
-  .layout.many { display: grid; grid-template-columns: 13.5rem minmax(0, 1fr); align-items: start; }
-  .many .side { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 8px 8px; }
-  .many .side-h { display: block; padding: 0 8px 8px; }
-  .many .people { display: flex; flex-direction: column; gap: 2px; }
-  .many .people-select { display: none; }
-  .many .person { width: 100%; justify-content: flex-start; border: 0; border-radius: 6px; padding: 9px 10px; background: transparent; text-align: left; line-height: 1.2; }
-  .many .person:hover { background: var(--bg); }
-  .many .person[aria-pressed="true"] { background: var(--pc); color: var(--on-bar); }
-}
+.picker > summary { list-style: none; }
+.picker > summary::-webkit-details-marker { display: none; }
+.few .picker > summary { display: none; }
+.many .picker { position: relative; align-self: flex-start; max-width: 100%; }
+.many .picker > summary { cursor: pointer; display: inline-flex; align-items: center; gap: 10px; border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 9px 16px 9px 12px; font-weight: 600; font-size: 15px; }
+.many .picker > summary::before { content: "Člověk"; font-family: var(--f-display); font-weight: 600; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.many .picker > summary::after { content: "▾"; color: var(--muted); }
+.many .picker[open] > summary::after { content: "▴"; }
+.many .picker > summary:focus-visible { outline: 2px solid var(--p1); outline-offset: 2px; }
+.many .people { position: absolute; z-index: 6; top: calc(100% + 6px); left: 0; width: min(660px, calc(100vw - 32px)); display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 2px; padding: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 14px 36px rgba(0, 0, 0, .22); }
+.many .person { width: 100%; justify-content: flex-start; border: 0; border-radius: 6px; padding: 10px; background: transparent; line-height: 1.2; text-align: left; }
+.many .person:hover { background: var(--bg); }
+.many .person[aria-pressed="true"] { background: var(--pc); color: var(--on-bar); }
+.top-right { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.theme-btn { appearance: none; cursor: pointer; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-weight: 600; font-size: 13px; line-height: 1; padding: 8px 12px; border-radius: 6px; }
+.theme-btn:hover { border-color: var(--muted); }
 
 /* slate */
 .slate { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; display: grid; grid-template-columns: minmax(0, 1fr); }
@@ -192,6 +184,11 @@ h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(36px, 6vw
   .tbl .code { min-width: 0; width: 100%; max-width: 30px; padding-inline: 2px; }
 }
 .tbl thead th { font-family: var(--f-display); font-weight: 600; font-size: 14px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); background: var(--surface); }
+.tbl thead th .nm-full { text-transform: none; letter-spacing: .01em; font-size: 15px; }
+.tbl thead th .fn, .tbl thead th .ln { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; overflow-wrap: normal; }
+.tbl thead th .ln { font-weight: 500; }
+.tbl thead th.sel .nm-full { font-weight: 700; }
+.stat-l { display: block; font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tbl thead th.sel { color: var(--ink); }
 .tbl thead th .dot { display: inline-block; margin-right: 6px; vertical-align: 1px; }
 .tbl td.d { font-family: var(--f-display); font-weight: 600; font-size: 16px; }
@@ -299,15 +296,17 @@ footer { font-family: var(--f-mono); font-size: 12px; color: var(--muted); displ
       <h1>Směny <span id="team">SPORT</span></h1>
       <nav class="teams" id="teams" aria-label="Tým" hidden></nav>
     </div>
-    <p class="fresh" id="fresh"></p>
+    <div class="top-right">
+      <p class="fresh" id="fresh"></p>
+      <button type="button" class="theme-btn" id="themeBtn"></button>
+    </div>
   </header>
 
   <div class="layout" id="layout">
-  <aside class="side">
-    <p class="eyebrow side-h">Lidé</p>
+  <details class="picker" id="picker" open>
+    <summary><span class="dot" id="pickerDot"></span><span id="pickerName"></span></summary>
     <nav class="people" id="people" aria-label="Čí směny zvýraznit"></nav>
-    <label class="people-select" for="personSelect"><span>Člověk</span><select id="personSelect"></select></label>
-  </aside>
+  </details>
   <div class="main">
 
   <section class="slate" id="slate" aria-live="polite"></section>
@@ -468,9 +467,12 @@ footer { font-family: var(--f-mono); font-size: 12px; color: var(--muted); displ
   }
 
   function renderPeople() {
-    $('layout').classList.toggle('many', people.length > 5);
-    $('personSelect').innerHTML = people.map(p =>
-      `<option value="${esc(p)}"${p === state.person ? ' selected' : ''}>${esc(p)}</option>`).join('');
+    const many = people.length > 5;
+    $('layout').classList.toggle('many', many);
+    $('layout').classList.toggle('few', !many);
+    $('pickerName').textContent = state.person;
+    $('pickerDot').style.setProperty('--pc', colorOf(state.person));
+    if (!many) $('picker').open = true;
     $('people').innerHTML = people.map(p =>
       `<button class="person" type="button" style="--pc:${colorOf(p)}" data-p="${esc(p)}" aria-pressed="${p === state.person}"><span class="dot"></span>${esc(p)}</button>`
     ).join('');
@@ -609,7 +611,7 @@ footer { font-family: var(--f-mono); font-size: 12px; color: var(--muted); displ
     const days = visibleDays(m);
     if (!days.length) return pastToggle(m) + `<p class="board-empty">${esc(state.person)} už v měsíci ${esc(m.label)} nemá žádnou směnu.</p>`;
     const ps = m.people;
-    const head = `<tr><th>Den</th>${ps.map(p => `<th class="${p === state.person ? 'sel' : ''}" style="--pc:${colorOf(p)}"><span class="dot"></span><span class="nm-full">${esc(p)}</span><span class="nm-short" title="${esc(p)}">${esc(initials(p))}</span></th>`).join('')}<th class="nt">Poznámka</th></tr>`;
+    const head = `<tr><th>Den</th>${ps.map(p => `<th class="${p === state.person ? 'sel' : ''}" style="--pc:${colorOf(p)}"><span class="nm-full"><span class="fn"><span class="dot"></span>${esc(p.split(' ')[0])}</span><span class="ln">${esc(p.split(' ').slice(1).join(' '))}</span></span><span class="nm-short" title="${esc(p)}">${esc(initials(p))}</span></th>`).join('')}<th class="nt">Poznámka</th></tr>`;
     const body = days.map(d => {
       const date = parseDate(d.date);
       const cls = [d.weekend && 'we', d.date === todayIso && 'today', d.date < todayIso && 'past'].filter(Boolean).join(' ');
@@ -618,7 +620,7 @@ footer { font-family: var(--f-mono); font-size: 12px; color: var(--muted); displ
         const sel = p === state.person ? 'sel' : '';
         if (!s) {
           const st = (d.statuses || []).find(x => x.person === p);
-          return `<td class="${sel}">${st ? `<span class="small">${esc(st.label)}</span>` : ''}</td>`;
+          return `<td class="${sel}">${st ? `<span class="stat-l" title="${esc(st.label)}">${esc(st.label)}</span>` : ''}</td>`;
         }
         return `<td class="${sel}" style="--pc:${colorOf(p)}"><span class="cell"><span class="code">${esc(s.raw)}</span><span class="t">${esc(s.start ? timeShort(s) : s.options ? s.options.map(o => `${hShort(o[0])}–${hShort(o[1])}`).join(' / ') : 'bez času')}</span></span></td>`;
       }).join('');
@@ -734,6 +736,7 @@ footer { font-family: var(--f-mono); font-size: 12px; color: var(--muted); displ
 
   function setPerson(p) {
     state.person = p;
+    if (people.length > 5) $('picker').open = false;
     store.set('person.' + (DATA.slug || DATA.team), state.person);
     try { history.replaceState(null, '', '#' + slug(state.person)); } catch (err) { /* sandbox */ }
     renderAll();
@@ -742,7 +745,24 @@ footer { font-family: var(--f-mono); font-size: 12px; color: var(--muted); displ
     const b = e.target.closest('[data-p]');
     if (b) setPerson(b.dataset.p);
   });
-  $('personSelect').addEventListener('change', e => setPerson(e.target.value));
+  document.addEventListener('click', e => {
+    if (people.length > 5 && $('picker').open && !e.target.closest('#picker')) $('picker').open = false;
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && people.length > 5 && $('picker').open) { $('picker').open = false; $('picker').querySelector('summary').focus(); }
+  });
+
+  function applyTheme(t) {
+    document.documentElement.setAttribute('data-theme', t);
+    $('themeBtn').textContent = t === 'dark' ? 'Světlý režim' : 'Tmavý režim';
+    $('themeBtn').setAttribute('aria-pressed', String(t === 'dark'));
+  }
+  applyTheme(store.get('theme') === 'dark' ? 'dark' : 'light');
+  $('themeBtn').addEventListener('click', () => {
+    const t = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    store.set('theme', t);
+    applyTheme(t);
+  });
   $('months').addEventListener('click', e => {
     const b = e.target.closest('[data-m]');
     if (!b) return;

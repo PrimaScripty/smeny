@@ -715,7 +715,7 @@ INDEX_HTML = """<!doctype html>
 <style>
 :root{--bg:#EEF1F5;--surface:#FFFFFF;--ink:#121620;--muted:#596274;--line:#D8DDE5;--accent:#2E58E0;
 --f-display:"Barlow Condensed","Arial Narrow",sans-serif;--f-body:"Barlow",system-ui,sans-serif}
-@media (prefers-color-scheme:dark){:root{--bg:#0D1016;--surface:#151A22;--ink:#E6EAF0;--muted:#97A1B1;--line:#283040;--accent:#7F9DFF;color-scheme:dark}}
+:root[data-theme=dark]{--bg:#05070A;--surface:#0F131A;--ink:#F6F8FB;--muted:#B7C0CE;--line:#3A4455;--accent:#7F9DFF;color-scheme:dark}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body)}
 main{max-width:720px;margin:0 auto;padding:40px 16px;display:flex;flex-direction:column;gap:20px}
 p{margin:0}.eyebrow{font-family:var(--f-display);font-weight:600;font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
@@ -726,6 +726,7 @@ a.team:hover,a.team:focus-visible{border-color:var(--accent);outline:none}
 a.team b{font-family:var(--f-display);font-weight:700;font-size:36px;line-height:1;text-transform:uppercase}
 a.team span{color:var(--muted);font-size:14px}
 </style>
+<script>try{if(localStorage.getItem('smeny.theme')==='dark')document.documentElement.dataset.theme='dark'}catch(e){}</script>
 </head>
 <body>
 <main>
