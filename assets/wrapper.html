@@ -156,8 +156,22 @@ h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(36px, 6vw
 .board-empty { padding: 28px 16px; color: var(--muted); text-align: center; }
 
 .tbl-wrap { overflow-x: auto; }
-.tbl { border-collapse: collapse; width: 100%; min-width: 560px; font-size: 14px; font-variant-numeric: tabular-nums; }
-.tbl th, .tbl td { padding: 5px 12px; border-bottom: 1px solid var(--line-soft); text-align: left; white-space: nowrap; }
+.tbl { border-collapse: collapse; width: 100%; table-layout: fixed; font-size: 14px; font-variant-numeric: tabular-nums; }
+.tbl th, .tbl td { padding: 5px 6px; border-bottom: 1px solid var(--line-soft); text-align: left; overflow-wrap: anywhere; vertical-align: middle; }
+.tbl th:first-child, .tbl td:first-child { width: 3.6rem; padding-left: 12px; white-space: nowrap; }
+.tbl .nt { width: 16%; }
+.tbl thead th { line-height: 1.15; vertical-align: bottom; }
+.tbl .nm-short { display: none; }
+.tbl .cell { flex-wrap: wrap; gap: 2px 6px; }
+@media (max-width: 699px) {
+  .tbl { font-size: 13px; }
+  .tbl th, .tbl td { padding: 4px 2px; text-align: center; }
+  .tbl th:first-child, .tbl td:first-child { width: 2.9rem; padding-left: 8px; text-align: left; }
+  .tbl .nt { display: none; }
+  .tbl .nm-full, .tbl thead th .dot, .cell .t { display: none; }
+  .tbl .nm-short { display: inline; }
+  .tbl .code { min-width: 0; width: 100%; max-width: 30px; padding-inline: 2px; }
+}
 .tbl thead th { font-family: var(--f-display); font-weight: 600; font-size: 14px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); background: var(--surface); }
 .tbl thead th.sel { color: var(--ink); }
 .tbl thead th .dot { display: inline-block; margin-right: 6px; vertical-align: 1px; }
@@ -225,6 +239,9 @@ td.sel .code { background: var(--pc); border-color: var(--pc); color: var(--on-b
 .teams a:hover { color: var(--ink); border-color: var(--muted); }
 .teams span { background: var(--ink); border-color: var(--ink); color: var(--bg); }
 .swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; border: 1px solid var(--line); vertical-align: -1px; margin-right: 6px; }
+
+.past-toggle { appearance: none; cursor: pointer; display: block; width: 100%; border: 0; border-bottom: 1px solid var(--line); background: var(--surface-2); color: var(--muted); font-size: 13px; font-weight: 600; padding: 9px 14px; text-align: left; }
+.past-toggle:hover { color: var(--ink); }
 
 /* spodní karty */
 .info { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
@@ -392,6 +409,7 @@ footer { font-family: var(--f-mono); font-size: 12px; color: var(--muted); displ
     person: initialPerson(),
     view: ['kalendar', 'osa', 'tabulka'].includes(store.get('view')) ? store.get('view') : 'kalendar',
     onlyMine: store.get('onlyMine') === '1',
+    showPast: false,
     month: defaultMonth(),
     day: null,
   };
@@ -495,14 +513,31 @@ footer { font-family: var(--f-mono); font-size: 12px; color: var(--muted); displ
     $('onlyMineLabel').textContent = state.view === 'kalendar' ? `Jen směny: ${first}` : `Jen dny, kdy má směnu ${first}`;
   }
 
+  // Uplynulé dny se skrývají jen v měsíci, který ještě běží; celý minulý měsíc se ukáže celý.
+  function pastCount(m) {
+    const t = isoOf(new Date());
+    const n = m.days.filter(d => d.date < t).length;
+    return n === m.days.length ? 0 : n;
+  }
+
+  function pastToggle(m) {
+    const n = pastCount(m);
+    if (!n) return '';
+    return `<button type="button" class="past-toggle" data-past aria-expanded="${state.showPast}">` +
+      (state.showPast ? 'Skrýt uplynulé dny' : `Ukázat ${n} ${pl(n, 'uplynulý den', 'uplynulé dny', 'uplynulých dní')}`) + '</button>';
+  }
+
   function visibleDays(m) {
-    return m.days.filter(d => !state.onlyMine || d.shifts.some(s => s.person === state.person));
+    const t = isoOf(new Date());
+    const hidePast = !state.showPast && pastCount(m) > 0;
+    return m.days.filter(d => (!hidePast || d.date >= t) &&
+      (!state.onlyMine || d.shifts.some(s => s.person === state.person)));
   }
 
   function renderEpg(m) {
     const now = new Date(), todayIso = isoOf(now);
     const days = visibleDays(m);
-    if (!days.length) return `<p class="board-empty">${esc(state.person)} nemá v měsíci ${esc(m.label)} žádnou směnu.</p>`;
+    if (!days.length) return pastToggle(m) + `<p class="board-empty">${esc(state.person)} už v měsíci ${esc(m.label)} nemá žádnou směnu.</p>`;
     const ticks = [];
     for (let h = H0; h <= H1; h++) {
       const cls = [h === H0 && 'first', h === H1 && 'last', (h - H0) % 2 && 'odd'].filter(Boolean).join(' ');
@@ -536,15 +571,15 @@ footer { font-family: var(--f-mono); font-size: 12px; color: var(--muted); displ
       return `<div class="${cls}"><div class="dl"><b>${date.getDate()}</b><span>${WD[date.getDay()]}</span></div>` +
         `<div class="track" style="--cols:${COLS};--hours:${HOURS}">${bars.join('')}${nowLine}</div><div class="x">${tags.join('')}</div></div>`;
     }).join('');
-    return `<div class="epg"><div class="axis"><div></div><div class="ticks">${ticks.join('')}</div><div class="xh">Bez času, poznámky</div></div>${rows}</div>`;
+    return pastToggle(m) + `<div class="epg"><div class="axis"><div></div><div class="ticks">${ticks.join('')}</div><div class="xh">Bez času, poznámky</div></div>${rows}</div>`;
   }
 
   function renderTable(m) {
     const todayIso = isoOf(new Date());
     const days = visibleDays(m);
-    if (!days.length) return `<p class="board-empty">${esc(state.person)} nemá v měsíci ${esc(m.label)} žádnou směnu.</p>`;
+    if (!days.length) return pastToggle(m) + `<p class="board-empty">${esc(state.person)} už v měsíci ${esc(m.label)} nemá žádnou směnu.</p>`;
     const ps = m.people;
-    const head = `<tr><th>Den</th>${ps.map(p => `<th class="${p === state.person ? 'sel' : ''}" style="--pc:${colorOf(p)}"><span class="dot"></span>${esc(p)}</th>`).join('')}<th>Poznámka</th></tr>`;
+    const head = `<tr><th>Den</th>${ps.map(p => `<th class="${p === state.person ? 'sel' : ''}" style="--pc:${colorOf(p)}"><span class="dot"></span><span class="nm-full">${esc(p)}</span><span class="nm-short" title="${esc(p)}">${esc(initials(p))}</span></th>`).join('')}<th class="nt">Poznámka</th></tr>`;
     const body = days.map(d => {
       const date = parseDate(d.date);
       const cls = [d.weekend && 'we', d.date === todayIso && 'today', d.date < todayIso && 'past'].filter(Boolean).join(' ');
@@ -557,10 +592,10 @@ footer { font-family: var(--f-mono); font-size: 12px; color: var(--muted); displ
         }
         return `<td class="${sel}" style="--pc:${colorOf(p)}"><span class="cell"><span class="code">${esc(s.raw)}</span><span class="t">${esc(s.start ? timeShort(s) : s.options ? s.options.map(o => `${hShort(o[0])}–${hShort(o[1])}`).join(' / ') : 'bez času')}</span></span></td>`;
       }).join('');
-      return `<tr class="${cls}"><td class="d">${date.getDate()}.<span>${WD[date.getDay()]}</span></td>${cells}<td class="small">${esc(d.notes.join('; '))}</td></tr>`;
+      return `<tr class="${cls}"><td class="d">${date.getDate()}.<span>${WD[date.getDay()]}</span></td>${cells}<td class="small nt">${esc(d.notes.join('; '))}</td></tr>`;
     }).join('');
-    const foot = `<tr><td>Hodiny</td>${ps.map(p => `<td>${num(m.hours[p] ?? 0)} h</td>`).join('')}<td></td></tr>`;
-    return `<div class="tbl-wrap"><table class="tbl"><thead>${head}</thead><tbody>${body}</tbody><tfoot>${foot}</tfoot></table></div>`;
+    const foot = `<tr><td>Hodin</td>${ps.map(p => `<td>${num(m.hours[p] ?? 0)}</td>`).join('')}<td class="nt"></td></tr>`;
+    return pastToggle(m) + `<div class="tbl-wrap"><table class="tbl"><thead>${head}</thead><tbody>${body}</tbody><tfoot>${foot}</tfoot></table></div>`;
   }
 
   function renderCalendar(m) {
@@ -698,6 +733,12 @@ footer { font-family: var(--f-mono); font-size: 12px; color: var(--muted); displ
   });
 
   $('grid').addEventListener('click', e => {
+    if (e.target.closest('[data-past]')) {
+      state.showPast = !state.showPast;
+      $('grid').innerHTML = state.view === 'tabulka' ? renderTable(curMonth()) : renderEpg(curMonth());
+      $('grid').querySelector('[data-past]')?.focus();
+      return;
+    }
     const b = e.target.closest('[data-day]');
     if (!b) return;
     state.day = b.dataset.day;
