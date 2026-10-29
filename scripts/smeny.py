@@ -201,6 +201,20 @@ def fetch_colors(sheet_id: str, gid: str) -> dict[tuple[int, int], str]:
     return colors
 
 
+def detect_year(rows: list[list[str]], year: int, month: int) -> int:
+    """Ověří rok z názvu listu podle dnů v týdnu. List zkopírovaný ze starší šablony mívá v názvu starý rok
+    (např. „SPORT leden 2026“ s rozpisem na leden 2027)."""
+    def score(y: int) -> int:
+        ndays, n = calendar.monthrange(y, month)[1], 0
+        for row in rows[2:]:
+            d, wd = to_num(row[0]), norm(row[1]).lower()
+            if isinstance(d, int) and wd in WEEKDAYS and 1 <= d <= ndays:
+                n += WEEKDAYS[dt.date(y, month, d).weekday()] == wd
+        return n
+    best = max((year, year + 1, year - 1), key=score)
+    return best if score(best) > score(year) else year
+
+
 def month_of_tab(name: str, team: str):
     m = re.fullmatch(rf"{re.escape(team)}\s+(\S+)\s+(\d{{4}})", norm(name), re.I)
     if m and m.group(1).lower() in MONTHS:
@@ -340,13 +354,19 @@ def resolve_month(m: dict, statuses: dict[str, str]) -> None:
             if n is not None:
                 hours[s["person"]] += n
                 counts[s["person"]] += 1
+                # Barva buňky má přednost a hledá se v celé legendě: o svátcích se všední den
+                # zapisuje víkendovými barvami (žlutá 8 = 14–22, ne všední 5–13).
                 cands: list[dict] = []
-                for sec in (own, other):
-                    cands = [e for e in m["legend"][sec] if e["code"] == str(n)]
-                    if len(cands) > 1 and s.get("color"):
-                        cands = [e for e in cands if e["color"] == s["color"]] or cands
-                    if cands:
-                        break
+                if s.get("color"):
+                    for sec in (own, other):
+                        cands = [e for e in m["legend"][sec] if e["code"] == str(n) and e["color"] == s["color"]]
+                        if cands:
+                            break
+                if not cands:
+                    for sec in (own, other):
+                        cands = [e for e in m["legend"][sec] if e["code"] == str(n)]
+                        if cands:
+                            break
                 if len(cands) == 1:
                     s["start"], s["end"] = cands[0]["start"], cands[0]["end"]
                 elif cands:
@@ -396,7 +416,12 @@ def load_all(cfg: dict) -> dict:
         for t in tabs:
             ym = month_of_tab(t["name"], team)
             if ym:
-                m = parse_month(fetch_rows(sid, t["gid"]), *ym, colors=fetch_colors(sid, t["gid"]))
+                rows = fetch_rows(sid, t["gid"])
+                year = detect_year(rows, *ym)
+                m = parse_month(rows, year, ym[1], colors=fetch_colors(sid, t["gid"]))
+                if year != ym[0]:
+                    m["warnings"].insert(0, f"List „{t['name']}“ má v názvu rok {ym[0]}, ale dny v týdnu odpovídají "
+                                            f"roku {year}, takže ho beru jako {MONTH_LABEL[ym[1]]} {year}.")
                 statuses.update(m.pop("statusDefs"))
                 m.update(tab=t["name"], gid=t["gid"])
                 months.append(m)

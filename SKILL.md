@@ -13,8 +13,9 @@ Výchozí tým je SPORT (`team`) a výchozí osoba **Martin Tomek**. DENNÍ výc
 
 - Hlavička tvoří 2 řádky: jméno a příjmení. Pod nimi je jeden řádek na každý den (číslo dne, den v týdnu, buňka pro každého člověka). Za lidmi je sloupec se součtem dne a poznámka (např. „Zaučení AL“).
 - **Číslo v buňce je počet hodin.** Čas začátku a konce je v legendě pod rozpisem. Teď platí: všední dny `8` = 6:00–14:00, `7` = 13:00–20:00, `14` = 6:00–20:00, víkend `12` = 6:00–18:00. Skript legendu čte z listu, takže změny pozná sám.
-- V DENNÍ má stejný kód víc časů (`7` = 12–19 nebo 15–22, `10` = 8–18 nebo 9–19). Rozhoduje **barva buňky**, která odpovídá barvě kódu v legendě. Skript barvy čte z HTML náhledu listu. Když barva nerozhodne, výstup ukáže obě možnosti. Neodhaduj, řekni to tak.
+- V DENNÍ má stejný kód víc časů (`7` = 12–19 nebo 15–22, `10` = 8–18 nebo 9–19). Rozhoduje **barva buňky**, která odpovídá barvě kódu v legendě, a má přednost i před tím, jestli je všední den, nebo víkend: o svátcích se všední den zapisuje víkendovými barvami (žlutá `8` = 14–22). Skript barvy čte z HTML náhledu listu. Když barva nerozhodne, výstup ukáže obě možnosti. Neodhaduj, řekni to tak.
 - Prázdné barevné buňky jsou stavy z legendy: červená = vyblokováno, tyrkysová = dělá SPORT, žlutá nebo oranžová = dělá DENNÍ.
+- Rok bere skript z názvu listu, ale ověří ho podle dnů v týdnu. List zkopírovaný ze šablony se starým rokem zařadí podle skutečného roku a upozorní na to v kontrole.
 - Kódy, které v legendě nejsou (např. `3`, `13`), mají jen délku, ne čas. Řekni to tak a čas si nevymýšlej.
 - Pod rozpisem jsou poznámky k lidem (např. „3 školení Piero“, „1 AI 1 Laver Cup 1 NHL“) a řádek součtů hodin.
 - Pod rozpisem DENNÍ jsou i číselné řádky (online, částky). Skript z nich nebere nic kromě řádku součtů hodin a nikam je nepropisuj.
