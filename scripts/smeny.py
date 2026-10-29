@@ -103,7 +103,9 @@ def fmt_time(t: str) -> str:
 
 def fmt_shift(s: dict) -> str:
     if s.get("start"):
-        return f"{fmt_time(s['start'])}–{fmt_time(s['end'])}"
+        return ("cca " if s.get("approx") else "") + f"{fmt_time(s['start'])}–{fmt_time(s['end'])}"
+    if s.get("event"):
+        return f"{fmt_num(s['hours'])} h, {s['event']}"
     if s.get("options"):
         return f"{fmt_num(s['hours'])} h, " + " nebo ".join(f"{fmt_time(a)}–{fmt_time(b)}" for a, b in s["options"])
     if s.get("hours") is not None:
@@ -262,8 +264,9 @@ def parse_month(rows: list[list[str]], year: int, month: int, colors: dict | Non
         date = dt.date(year, month, d)
         if WEEKDAYS[date.weekday()] != wd:
             warnings.append(f"{d}. {month}. je v tabulce „{wd}“, ve skutečnosti {WEEKDAYS[date.weekday()]}.")
-        total, notes = None, []
-        for x in (norm(v) for v in row[last_col + 1:]):
+        total, notes, note_colors = None, [], {}
+        for k in range(last_col + 1, len(row)):
+            x = norm(row[k])
             if not x:
                 continue
             n = to_num(x)
@@ -271,6 +274,9 @@ def parse_month(rows: list[list[str]], year: int, month: int, colors: dict | Non
                 total = n
             else:
                 notes.append(x)
+                # Barevná poznámka (např. „volby USA“ světle modře) značí směny stejné barvy.
+                if (i, k) in colors:
+                    note_colors[colors[(i, k)]] = x
         days.append({
             "day": d,
             "date": date.isoformat(),
@@ -278,6 +284,7 @@ def parse_month(rows: list[list[str]], year: int, month: int, colors: dict | Non
             "weekend": date.weekday() >= 5,
             "total": total,
             "notes": notes,
+            "noteColors": note_colors,
             "shifts": [{"person": name, "raw": norm(row[c]), "color": colors.get((i, c))}
                        for c, name in people if norm(row[c])],
             "marks": [{"person": name, "color": colors[(i, c)]}
@@ -338,8 +345,11 @@ def parse_month(rows: list[list[str]], year: int, month: int, colors: dict | Non
     }
 
 
-def resolve_month(m: dict, statuses: dict[str, str]) -> None:
-    """Doplní časy směn z legendy (při víc možnostech rozhodne barva buňky), stavy, hodiny a varování."""
+def resolve_month(m: dict, statuses: dict[str, str], overrides: dict | None = None) -> None:
+    """Doplní časy směn z legendy (při víc možnostech rozhodne barva buňky), stavy, hodiny a varování.
+
+    Pořadí: ruční úprava z overrides.json → barva v legendě → barevná poznámka dne (zvláštní akce) → jen kód."""
+    overrides = overrides or {}
     month = m["month"]
     hours = {p: 0 for p in m["people"]}
     counts = {p: 0 for p in m["people"]}
@@ -354,6 +364,10 @@ def resolve_month(m: dict, statuses: dict[str, str]) -> None:
             if n is not None:
                 hours[s["person"]] += n
                 counts[s["person"]] += 1
+                ov = overrides.get((day["date"], s["person"]))
+                if ov:
+                    s.update(start=ov["start"], end=ov["end"], approx=bool(ov.get("approx")))
+                    continue
                 # Barva buňky má přednost a hledá se v celé legendě: o svátcích se všední den
                 # zapisuje víkendovými barvami (žlutá 8 = 14–22, ne všední 5–13).
                 cands: list[dict] = []
@@ -362,6 +376,10 @@ def resolve_month(m: dict, statuses: dict[str, str]) -> None:
                         cands = [e for e in m["legend"][sec] if e["code"] == str(n) and e["color"] == s["color"]]
                         if cands:
                             break
+                event = day["noteColors"].get(s["color"]) if not cands and s.get("color") else None
+                if event:
+                    s["event"] = event
+                    continue
                 if not cands:
                     for sec in (own, other):
                         cands = [e for e in m["legend"][sec] if e["code"] == str(n)]
@@ -374,6 +392,7 @@ def resolve_month(m: dict, statuses: dict[str, str]) -> None:
                     ambiguous.setdefault(s["raw"], []).append(where)
             if not s["start"] and not s["options"]:
                 unknown.setdefault(s["raw"], []).append(where)
+        day.pop("noteColors", None)
         day["statuses"] = [{"person": x["person"], "label": statuses[x["color"]]}
                            for x in day.pop("marks", []) if x["color"] in statuses]
     for code, where in unknown.items():
@@ -399,6 +418,15 @@ def parse_vacations(rows: list[list[str]]) -> dict[str, list[str]]:
         if name and vals:
             out[name] = vals
     return out
+
+
+def load_overrides(team: str) -> dict[tuple[str, str], dict]:
+    """Ruční časy směn, které v tabulce nejsou (overrides.json v kořeni repozitáře)."""
+    path = ROOT / "overrides.json"
+    if not path.exists():
+        return {}
+    return {(o["date"], o["person"]): o for o in json.loads(path.read_text(encoding="utf-8"))
+            if fold(o["team"]) == fold(team)}
 
 
 def team_configs(cfg: dict) -> dict[str, dict]:
@@ -431,9 +459,10 @@ def load_all(cfg: dict) -> dict:
             people += [p for p in m["people"] if p not in people]
         teams[team] = {"slug": tcfg.get("slug") or slug(team), "defaultPerson": tcfg.get("default_person"),
                        "people": people, "months": months}
-    for t in teams.values():
+    for name, t in teams.items():
+        overrides = load_overrides(name)
         for m in t["months"]:
-            resolve_month(m, statuses)
+            resolve_month(m, statuses, overrides)
 
     vacations: dict[str, list[str]] = {}
     vac_tab = next((t for t in tabs if fold(t["name"]) == fold(cfg.get("vacations_tab"))), None)

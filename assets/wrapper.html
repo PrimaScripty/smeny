@@ -362,10 +362,11 @@ footer { font-family: var(--f-mono); font-size: 12px; color: var(--muted); displ
   const hShort = t => { const [h, m] = t.split(':'); return m === '00' ? `${+h}` : `${+h}:${m}`; };
   const toH = t => { const [h, m] = t.split(':').map(Number); return h + m / 60; };
   const vAt = t => { const h = +t.split(':')[0]; return ([2, 3, 4, 12, 13, 14].includes(h) || h >= 20) ? 've' : 'v'; };
-  const timeLabel = s => s.start ? `${hm(s.start)}–${hm(s.end)}`
+  const timeLabel = s => s.start ? `${s.approx ? 'cca ' : ''}${hm(s.start)}–${hm(s.end)}`
+    : s.event ? `${num(s.hours)} h, ${s.event}`
     : s.options ? `${num(s.hours)} h, ${s.options.map(o => `${hm(o[0])}–${hm(o[1])}`).join(' nebo ')}`
     : (s.hours != null ? `${num(s.hours)} h, čas neuveden` : s.raw);
-  const timeShort = s => s.start ? `${hShort(s.start)}–${hShort(s.end)}` : (s.hours != null ? `${num(s.hours)} h` : s.raw);
+  const timeShort = s => s.start ? `${s.approx ? '≈' : ''}${hShort(s.start)}–${hShort(s.end)}` : (s.hours != null ? `${num(s.hours)} h` : s.raw);
   const parseDate = iso => { const [y, m, d] = iso.split('-').map(Number); return new Date(y, m - 1, d); };
   const isoOf = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   const at = (iso, t) => { const d = parseDate(iso); const [h, m] = t.split(':').map(Number); d.setHours(h, m, 0, 0); return d; };
@@ -409,7 +410,8 @@ footer { font-family: var(--f-mono); font-size: 12px; color: var(--muted); displ
   })));
   SH.sort((a, b) => a.t0 - b.t0);
 
-  const legendTimes = DATA.months.flatMap(m => Object.values(m.legend || {}).flatMap(sec => (sec || []).map(e => [e.start, e.end])));
+  const legendTimes = DATA.months.flatMap(m => Object.values(m.legend || {}).flatMap(sec => (sec || []).map(e => [e.start, e.end])))
+    .concat(DATA.months.flatMap(m => m.days.flatMap(d => d.shifts.filter(s => s.start).map(s => [s.start, s.end]))));
   let H0 = 6, H1 = 20;
   if (legendTimes.length) {
     H0 = Math.floor(Math.min(...legendTimes.map(t => toH(t[0]))));
@@ -622,7 +624,7 @@ footer { font-family: var(--f-mono); font-size: 12px; color: var(--muted); displ
           const st = (d.statuses || []).find(x => x.person === p);
           return `<td class="${sel}">${st ? `<span class="stat-l" title="${esc(st.label)}">${esc(st.label)}</span>` : ''}</td>`;
         }
-        return `<td class="${sel}" style="--pc:${colorOf(p)}"><span class="cell"><span class="code">${esc(s.raw)}</span><span class="t">${esc(s.start ? timeShort(s) : s.options ? s.options.map(o => `${hShort(o[0])}–${hShort(o[1])}`).join(' / ') : 'bez času')}</span></span></td>`;
+        return `<td class="${sel}" style="--pc:${colorOf(p)}"><span class="cell"><span class="code">${esc(s.raw)}</span><span class="t">${esc(s.start ? timeShort(s) : s.options ? s.options.map(o => `${hShort(o[0])}–${hShort(o[1])}`).join(' / ') : s.event ? s.event : 'bez času')}</span></span></td>`;
       }).join('');
       return `<tr class="${cls}"><td class="d">${date.getDate()}.<span>${WD[date.getDay()]}</span></td>${cells}<td class="small nt">${esc(d.notes.join('; '))}</td></tr>`;
     }).join('');
