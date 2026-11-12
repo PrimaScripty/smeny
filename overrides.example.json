@@ -1,0 +1,11 @@
+[
+  {
+    "team": "DENNÍ",
+    "date": "2026-12-31",
+    "person": "Jméno Příjmení",
+    "start": "20:00",
+    "end": "06:00",
+    "approx": true,
+    "why": "Příklad: směna přes noc, v tabulce jen kód bez času. Čas je přibližný."
+  }
+]
