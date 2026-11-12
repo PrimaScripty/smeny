@@ -11,6 +11,10 @@ Příkazy (viz SKILL.md), tým volí --team (sport, denni) před příkazem:
   site  --out SLOŽKA                    veřejný web: rozcestník + složka pro každý tým (GitHub Pages)
   check                                 kontrola tabulky (součty, neexistující dny, neznámé kódy)
   set-artifact URL                      uloží URL publikovaného přehledu do config.json
+  overrides                             ruční časy směn na jeden řádek pro secret SMENY_OVERRIDES
+
+Jména lidí v repozitáři nejsou. Výchozí osoba je v config.json (lokálně) nebo v proměnné SMENY_PERSON,
+ruční časy směn v overrides.json (lokálně) nebo v proměnné SMENY_OVERRIDES; v GitHub Actions jde o secrety.
 """
 from __future__ import annotations
 
@@ -30,6 +34,7 @@ import urllib.request
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 CONFIG_PATH = ROOT / "config.json"
+OVERRIDES_PATH = ROOT / "overrides.json"
 TEMPLATE_PATH = ROOT / "assets" / "wrapper.html"
 
 MONTHS = {
@@ -96,6 +101,11 @@ def fmt_num(n) -> str:
     return str(n).replace(".", ",")
 
 
+def warn(msg: str) -> None:
+    """Upozornění na stderr; v GitHub Actions jako anotace, ať je vidět v přehledu běhu. Nikdy v něm nepiš jména."""
+    print(("::warning::" if os.environ.get("GITHUB_ACTIONS") == "true" else "Upozornění: ") + msg, file=sys.stderr)
+
+
 def fmt_time(t: str) -> str:
     h, m = t.split(":")
     return f"{int(h)}:{m}"
@@ -134,6 +144,11 @@ def load_config() -> dict:
     for key, env in (("sheet_id", "SMENY_SHEET_ID"), ("team", "SMENY_TEAM"), ("default_person", "SMENY_PERSON")):
         if os.environ.get(env):
             cfg[key] = os.environ[env]
+    if os.environ.get("SMENY_PERSON"):
+        # S více týmy platí SMENY_PERSON pro výchozí tým (na webu ho stránka vybere, dokud si návštěvník nezvolí jiného).
+        for name, tcfg in (cfg.get("teams") or {}).items():
+            if fold(cfg.get("team")) in (fold(name), tcfg.get("slug")):
+                tcfg["default_person"] = os.environ["SMENY_PERSON"]
     if not cfg.get("sheet_id") or cfg["sheet_id"] == "ID_TABULKY":
         raise SystemExit("Chybí ID tabulky: vyplň sheet_id v config.json nebo nastav proměnnou SMENY_SHEET_ID.")
     return cfg
@@ -348,7 +363,8 @@ def parse_month(rows: list[list[str]], year: int, month: int, colors: dict | Non
 def resolve_month(m: dict, statuses: dict[str, str], overrides: dict | None = None) -> None:
     """Doplní časy směn z legendy (při víc možnostech rozhodne barva buňky), stavy, hodiny a varování.
 
-    Pořadí: ruční úprava z overrides.json → barva v legendě → barevná poznámka dne (zvláštní akce) → jen kód."""
+    Pořadí: ruční úprava (read_overrides) → barva v legendě → barevná poznámka dne (zvláštní akce) → jen kód.
+    Klíč ruční úpravy je (datum, fold(jméno))."""
     overrides = overrides or {}
     month = m["month"]
     hours = {p: 0 for p in m["people"]}
@@ -364,7 +380,7 @@ def resolve_month(m: dict, statuses: dict[str, str], overrides: dict | None = No
             if n is not None:
                 hours[s["person"]] += n
                 counts[s["person"]] += 1
-                ov = overrides.get((day["date"], s["person"]))
+                ov = overrides.get((day["date"], fold(s["person"])))
                 if ov:
                     s.update(start=ov["start"], end=ov["end"], approx=bool(ov.get("approx")))
                     continue
@@ -420,13 +436,41 @@ def parse_vacations(rows: list[list[str]]) -> dict[str, list[str]]:
     return out
 
 
-def load_overrides(team: str) -> dict[tuple[str, str], dict]:
-    """Ruční časy směn, které v tabulce nejsou (overrides.json v kořeni repozitáře)."""
-    path = ROOT / "overrides.json"
-    if not path.exists():
-        return {}
-    return {(o["date"], o["person"]): o for o in json.loads(path.read_text(encoding="utf-8"))
-            if fold(o["team"]) == fold(team)}
+def read_overrides() -> tuple[list[dict], str]:
+    """Ruční časy směn, které v tabulce nejsou. Obsahují jména, takže v repozitáři nejsou:
+    proměnná prostředí SMENY_OVERRIDES (v GitHub Actions secret), jinak overrides.json v kořeni (v .gitignore).
+
+    Vrací (záznamy, zdroj). Vadný záznam se jen přeskočí s upozorněním, aby se přehled sestavil dál."""
+    env = os.environ.get("SMENY_OVERRIDES", "").strip()
+    if env:
+        text, source = env, "SMENY_OVERRIDES"
+    elif OVERRIDES_PATH.exists():
+        text, source = OVERRIDES_PATH.read_text(encoding="utf-8-sig"), OVERRIDES_PATH.name
+    else:
+        return [], ""
+    try:
+        items = json.loads(text)
+    except json.JSONDecodeError as e:
+        warn(f"{source} není platný JSON ({e.msg}, řádek {e.lineno}, sloupec {e.colno}), ruční časy směn vynechány.")
+        return [], source
+    if not isinstance(items, list):
+        warn(f"{source} má být seznam záznamů v hranatých závorkách, ruční časy směn vynechány.")
+        return [], source
+    out = []
+    for i, o in enumerate(items, start=1):
+        o = o if isinstance(o, dict) else {}
+        try:
+            date = dt.date.fromisoformat(norm(str(o.get("date") or ""))).isoformat()
+        except ValueError:
+            date = None
+        rec = {**o, "team": norm(str(o.get("team") or "")), "date": date, "person": norm(str(o.get("person") or "")),
+               "start": to_time(str(o.get("start") or "")), "end": to_time(str(o.get("end") or ""))}
+        bad = [k for k in ("team", "date", "person", "start", "end") if not rec[k]]
+        if bad:
+            warn(f"{source}: záznam č. {i} nemá platné pole {', '.join(bad)}, přeskočen.")
+            continue
+        out.append(rec)
+    return out, source
 
 
 def team_configs(cfg: dict) -> dict[str, dict]:
@@ -459,10 +503,19 @@ def load_all(cfg: dict) -> dict:
             people += [p for p in m["people"] if p not in people]
         teams[team] = {"slug": tcfg.get("slug") or slug(team), "defaultPerson": tcfg.get("default_person"),
                        "people": people, "months": months}
+    overrides, source = read_overrides()
     for name, t in teams.items():
-        overrides = load_overrides(name)
+        mine = {(o["date"], fold(o["person"])): o for o in overrides if fold(o["team"]) == fold(name)}
         for m in t["months"]:
-            resolve_month(m, statuses, overrides)
+            resolve_month(m, statuses, mine)
+        # Ruční čas, který v načteném měsíci na žádnou směnu nesedí, je skoro jistě překlep (secret nejde zpětně přečíst).
+        dates = {d["date"] for m in t["months"] for d in m["days"]}
+        timed = {(d["date"], fold(s["person"])) for m in t["months"] for d in m["days"] for s in d["shifts"]
+                 if s["hours"] is not None}
+        for key, o in mine.items():
+            if key[0] in dates and key not in timed:
+                warn(f"{source}: ruční čas pro tým {name} na {o['date']} nesedí na žádnou směnu v rozpisu "
+                     f"(překlep ve jménu?).")
 
     vacations: dict[str, list[str]] = {}
     vac_tab = next((t for t in tabs if fold(t["name"]) == fold(cfg.get("vacations_tab"))), None)
@@ -477,6 +530,7 @@ def load_all(cfg: dict) -> dict:
         "sheetUrl": f"https://docs.google.com/spreadsheets/d/{sid}/edit",
         "teams": teams,
         "vacations": vacations,
+        "overrideInfo": f"ruční časy směn: {len(overrides)}" + (f" ({source})" if source else ""),
     }
 
 
@@ -803,7 +857,18 @@ def cmd_site(data_all, args):
                      f'<span>{len(view["people"])} lidí · {months}</span></a>')
         print(f"{out / t['slug'] / 'index.html'} – tým {name}, {len(view['months'])} měs.")
     write(out / "index.html", INDEX_HTML.replace("__TEAMS__", "".join(cards)))
-    print(f"{out / 'index.html'} – rozcestník, data z {data_all['generated']}")
+    print(f"{out / 'index.html'} – rozcestník, data z {data_all['generated']}, {data_all['overrideInfo']}")
+
+
+def cmd_overrides(args):
+    """Ruční časy směn (overrides.json nebo SMENY_OVERRIDES) zkontrolované a na jeden řádek, jak patří do secretu.
+    Víceřádkový secret by GitHub v logu maskoval po řádcích (i samotné závorky)."""
+    items, source = read_overrides()
+    if not source:
+        raise SystemExit("Ruční časy směn nejsou: chybí overrides.json (vzor overrides.example.json) i proměnná SMENY_OVERRIDES.")
+    print(json.dumps(items, ensure_ascii=False, separators=(",", ":")))
+    print(f"{len(items)} {plural(len(items), 'záznam', 'záznamy', 'záznamů')} (zdroj {source}). Řádek výše vlož do "
+          "Settings → Secrets and variables → Actions → Secrets → SMENY_OVERRIDES.", file=sys.stderr)
 
 
 def cmd_check(data, args):
@@ -821,8 +886,9 @@ def cmd_check(data, args):
 
 
 def main():
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8")
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser(description="Směny z Google tabulky")
     ap.add_argument("--team", help="tým: sport, denni (výchozí podle config.json)")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -837,8 +903,12 @@ def main():
     sub.add_parser("check")
     p = sub.add_parser("site"); p.add_argument("--out", required=True)
     p = sub.add_parser("set-artifact"); p.add_argument("url")
+    sub.add_parser("overrides", help="ruční časy směn na jeden řádek pro secret SMENY_OVERRIDES")
     args = ap.parse_args()
 
+    if args.cmd == "overrides":
+        cmd_overrides(args)
+        return
     cfg = load_config()
     if args.cmd == "set-artifact":
         cfg["artifact_url"] = args.url

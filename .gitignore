@@ -1,4 +1,5 @@
 config.json
+overrides.json
 out/
 *.ics
 __pycache__/

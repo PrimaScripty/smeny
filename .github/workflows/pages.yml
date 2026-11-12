@@ -25,9 +25,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Hodnoty z vars.* GitHub vypíše v logu běhu čitelně (log veřejného repa vidí každý přihlášený), secrets.* jako ***.
+      # Jména (výchozí osoba, ruční časy směn) proto jen v secretech. ID tabulky může být v secretu i v proměnné.
       - name: Postavit přehled z tabulky
         env:
-          SMENY_SHEET_ID: ${{ vars.SMENY_SHEET_ID }}
+          SMENY_SHEET_ID: ${{ secrets.SMENY_SHEET_ID || vars.SMENY_SHEET_ID }}
+          SMENY_PERSON: ${{ secrets.SMENY_PERSON }}
+          SMENY_OVERRIDES: ${{ secrets.SMENY_OVERRIDES }}
         run: python3 scripts/smeny.py site --out _site
 
       - uses: actions/configure-pages@v5

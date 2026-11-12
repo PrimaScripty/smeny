@@ -1,27 +1,28 @@
 ---
 name: smeny
-description: Rozpis směn týmů SPORT a DENNÍ (grafika Prima Sport) z Google tabulky. Kdy má Martin Tomek (nebo kdokoli z týmu) další směnu, kdo dělá v určitý den, kolik hodin má v měsíci, export směn do Google Kalendáře (.ics) a obnova přehledu „Směny SPORT“ (Artifact). Použij, když se uživatel ptá na směny, službu, rozpis, „kdy jdu do práce“, „mám volno?“, „kdo je v sobotu“, „hodiny v listopadu“, „dej směny do kalendáře“, „obnov přehled směn“, nebo napíše /smeny.
+description: Rozpis směn týmů SPORT a DENNÍ (grafika Prima Sport) z Google tabulky. Kdy má uživatel (nebo kdokoli z týmu) další směnu, kdo dělá v určitý den, kolik hodin má v měsíci, export směn do Google Kalendáře (.ics) a obnova přehledu „Směny SPORT“ (Artifact). Použij, když se uživatel ptá na směny, službu, rozpis, „kdy jdu do práce“, „mám volno?“, „kdo je v sobotu“, „hodiny v listopadu“, „dej směny do kalendáře“, „obnov přehled směn“, nebo napíše /smeny.
 ---
 
 # Směny SPORT a DENNÍ
 
 Zdroj je Google tabulka (`sheet_id` v `config.json`), veřejně čitelná přes CSV export, takže není potřeba přihlášení.
 Měsíce jsou na listech `<TÝM> <měsíc> <rok>` (např. „SPORT listopad 2026“, „DENNÍ říjen 2026“) a skript nové měsíce najde sám. Týmy jsou v `config.json` pod `teams`.
-Výchozí tým je SPORT (`team`) a výchozí osoba **Martin Tomek**. DENNÍ výchozí osobu nemá. Když uživatel říká „já“ nebo „moje směny“, myslí tím ji, pokud neřekne jinak.
+Výchozí tým je SPORT (`team`) a výchozí osoba je jeho `default_person` v `config.json`. DENNÍ výchozí osobu nemá. Když uživatel říká „já“ nebo „moje směny“, myslí tím výchozí osobu, pokud neřekne jinak.
+Repozitář je veřejný: jména lidí nepiš do žádného souboru, který je v gitu (jen do `config.json` a `overrides.json`, oba jsou v `.gitignore`), ani do commitů.
 
 ## Jak číst tabulku
 
-- Hlavička tvoří 2 řádky: jméno a příjmení. Pod nimi je jeden řádek na každý den (číslo dne, den v týdnu, buňka pro každého člověka). Za lidmi je sloupec se součtem dne a poznámka (např. „Zaučení AL“).
+- Hlavička tvoří 2 řádky: jméno a příjmení. Pod nimi je jeden řádek na každý den (číslo dne, den v týdnu, buňka pro každého člověka). Za lidmi je sloupec se součtem dne a poznámka (např. „Zaučení“).
 - **Číslo v buňce je počet hodin.** Čas začátku a konce je v legendě pod rozpisem. Teď platí: všední dny `8` = 6:00–14:00, `7` = 13:00–20:00, `14` = 6:00–20:00, víkend `12` = 6:00–18:00. Skript legendu čte z listu, takže změny pozná sám.
 - V DENNÍ má stejný kód víc časů (`7` = 12–19 nebo 15–22, `10` = 8–18 nebo 9–19). Rozhoduje **barva buňky**, která odpovídá barvě kódu v legendě, a má přednost i před tím, jestli je všední den, nebo víkend: o svátcích se všední den zapisuje víkendovými barvami (žlutá `8` = 14–22). Skript barvy čte z HTML náhledu listu. Když barva nerozhodne, výstup ukáže obě možnosti. Neodhaduj, řekni to tak.
 - Zvláštní akce: když barva směny v legendě není, ale stejnou barvu má poznámka dne (např. „volby USA“ světle modře), patří směna k té akci a ukáže se jako „10 h, volby USA“. Čas v tabulce není.
-- Časy, které v tabulce nejsou, se doplňují ručně do `overrides.json` v kořeni repozitáře (tým, datum, člověk, `start`, `end`, `approx` pro přibližný čas, `why`). Ruční úprava má přednost před legendou. Když uživatel řekne čas zvláštní směny, přidej záznam tam. Přibližný čas se zobrazí jako „cca“. Soubor je veřejný v repozitáři, takže do `why` patří jen to, co už je na webu.
+- Časy, které v tabulce nejsou, se doplňují ručně do `overrides.json` v kořeni skillu (tým, datum, člověk, `start`, `end`, `approx` pro přibližný čas, `why`; vzor `overrides.example.json`). Ruční úprava má přednost před legendou. Když uživatel řekne čas zvláštní směny, přidej záznam tam. Přibližný čas se zobrazí jako „cca“. Soubor obsahuje jména, a proto je jen lokálně (v `.gitignore`). Veřejný web ho bere ze secretu `SMENY_OVERRIDES`: po změně spusť `python ~/.claude/skills/smeny/scripts/smeny.py overrides` a uživateli řekni, ať vypsaný řádek vloží do Settings → Secrets and variables → Actions → Secrets → `SMENY_OVERRIDES` (secret si nastavuje sám). Do `why` patří jen to, co už je na webu.
 - Prázdné barevné buňky jsou stavy z legendy: červená = vyblokováno, tyrkysová = dělá SPORT, žlutá nebo oranžová = dělá DENNÍ.
 - Rok bere skript z názvu listu, ale ověří ho podle dnů v týdnu. List zkopírovaný ze šablony se starým rokem zařadí podle skutečného roku a upozorní na to v kontrole.
 - Kódy, které v legendě nejsou (např. `3`, `13`), mají jen délku, ne čas. Řekni to tak a čas si nevymýšlej.
 - Pod rozpisem jsou poznámky k lidem (např. „3 školení Piero“, „1 AI 1 Laver Cup 1 NHL“) a řádek součtů hodin.
 - Pod rozpisem DENNÍ jsou i číselné řádky (online, částky). Skript z nich nebere nic kromě řádku součtů hodin a nikam je nepropisuj.
-- „Martin“ v DENNÍ je Martin Málek, ne Martin Tomek. Jan Smutný je v obou týmech.
+- Stejné křestní jméno může v DENNÍ patřit někomu jinému než ve SPORT a jeden člověk může být v obou týmech. Když z otázky není jasné, koho uživatel myslí, podívej se na seznam lidí ve výstupu (`check`) a zeptej se.
 
 ## Skript
 
@@ -44,8 +45,9 @@ Bez `--team` platí SPORT. Když se ptá na někoho z DENNÍ, přidej `--team de
 | `build --out SOUBOR [--person JMÉNO]` | HTML přehled (šablona `assets/wrapper.html`) |
 | `site --out SLOŽKA` | veřejný web: rozcestník, `sport/` a `denni/` (to dělá GitHub Actions) |
 | `set-artifact URL` | uloží URL publikovaného přehledu do `config.json` |
+| `overrides` | zkontroluje `overrides.json` a vypíše ho na jeden řádek pro secret `SMENY_OVERRIDES` |
 
-Jména se hledají bez ohledu na diakritiku a stačí jednoznačná část (`tomek`, `bláha`, `alex`).
+Jména se hledají bez ohledu na diakritiku a stačí jednoznačná část (jen příjmení nebo křestní jméno).
 
 ## Odpovídání
 
@@ -81,7 +83,8 @@ Když uživatel chce „otevřít přehled u sebe“, spusť `smeny.cmd`. Soubor
 
 Repozitář je na GitHubu u účtu `PrimaScripty`, web má rozcestník a stránky `/sport/` a `/denni/` (adresu najdeš v Settings → Pages). GitHub Actions ([pages.yml](.github/workflows/pages.yml)) web každých 30 minut a při každém pushi postaví znovu příkazem `site`. Claude k tomu není potřeba.
 
-- Číslo tabulky je v repozitáři jen jako proměnná `SMENY_SHEET_ID` (Settings → Secrets and variables → Actions → Variables). V `config.json` je lokálně, soubor je v `.gitignore`. Nikdy ho nedávej do commitu ani do veřejného výstupu.
+- Číslo tabulky je v repozitáři jen jako `SMENY_SHEET_ID` v Settings → Secrets and variables → Actions (proměnná nebo secret). V `config.json` je lokálně, soubor je v `.gitignore`. Nikdy ho nedávej do commitu ani do veřejného výstupu.
+- Výchozí osoba webu (`SMENY_PERSON`) a ruční časy směn (`SMENY_OVERRIDES`) jsou v Secrets, protože obsahují jména. Hodnoty z Variables GitHub vypíše čitelně do veřejného logu běhu.
 - Veřejné stránky (`--public`, `site`) vynechají odkaz na zdrojovou tabulku a plánované dovolené a přidá `noindex`. Na webu jsou jména a směny lidí z týmu, takže před změnou toho, co se zveřejňuje, se zeptej.
 - Změna kódu nebo šablony se na web dostane pushem na `main`. Push i další zápisy na GitHub si uživatel dělá sám v Terminálu, systém je Claudovi blokuje. Stav sestavení jde číst bez tokenu: `https://api.github.com/repos/PrimaScripty/smeny/actions/runs`.
 - GitHub vypne plánovaná spuštění po 60 dnech bez aktivity v repozitáři. Pak je potřeba workflow znovu zapnout v záložce Actions.
