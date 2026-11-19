@@ -3,8 +3,11 @@ name: Obnovit přehled směn
 on:
   push:
     branches: [main]
+  # Cron je jen záloha: GitHub ho na veřejném repu (plán Free) spouští zhruba 1× za hodinu
+  # a vynechává i 6–8 hodin, nejvíc v celou a půl hodiny. Hlavní obnovu dělá plánovaná úloha
+  # „Obnova Směn“ na grafickém PC (workflow_dispatch přes gh každých 30 min).
   schedule:
-    - cron: "*/30 * * * *"
+    - cron: "17,47 * * * *"
   workflow_dispatch:
 
 permissions:
